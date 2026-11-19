@@ -97,7 +97,7 @@ function placeBlocks(blocks, W, ord = 0) {
     const x0 = Math.min(...mine.map(r => r.x)), y0 = Math.min(...mine.map(r => r.y)), x1 = Math.max(...mine.map(r => r.x + r.w)), y1 = Math.max(...mine.map(r => r.y + r.h));
     for (const r of rects) if (r.f !== f) intr += Math.max(0, Math.min(x1, r.x + r.w) - Math.max(x0, r.x)) * Math.max(0, Math.min(y1, r.y + r.h) - Math.max(y0, r.y));
   }
-  return { blocks: out, L, reg: 1 + .08 * (uy - 1) + .03 * (ux - 1) + 2 * intr / Math.max(1, tot) };
+  return { blocks: out, L, area: tot, reg: 1 + .08 * (uy - 1) + .03 * (ux - 1) + 2 * intr / Math.max(1, tot) };
 }
 
 // melhor arranjo de um conjunto de grupos numa largura W (testa giros e numero de colunas)
@@ -155,6 +155,7 @@ function packLayers(layers, o, P, fino, faixa) {
     const L = Math.max(...rs.map(r => r.L));
     if (o.horizontal !== false && W < L - 1e-9) return;   // caixa na horizontal
     const reg = rs.reduce((s, r) => s + r.reg, 0) / rs.length;
+    if (alinhado && rs.reduce((s, r) => s + r.area, 0) / rs.length / Math.max(1, W * L) < .7) return;   // nao sugerir caixa com muito espaco vazio
     // fileiras/colunas de produtos iguais (como na caixa real) aceitam uma caixa mais comprida
     const score = W * L * shape(W, L, alinhado ? { ...o, ratio: Math.max(o.ratio, 3.2) } : o) * reg;
     if (!best || score < best.score - 1) best = { rs, W, L, score };
@@ -167,6 +168,7 @@ function packLayers(layers, o, P, fino, faixa) {
     const rs = layers.map(l => linhas(l, P, o, strat));
     if (!rs.some(r => !r)) consider(rs, Math.max(...rs.map(r => r.W)), true);
   }
+  if (!best && o.altura && !faixa) { const r = packLayers(layers, { ...o, altura: 0 }, P, fino, faixa); if (r) r.semAltura = true; return r; }
   return best;
 }
 
@@ -223,7 +225,7 @@ function build0(prod, o, P) {
     if (!best || c.score < best.score) best = c;
   }
   const blocks = best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` })));
-  return assemble(blocks, P, o);
+  const res = assemble(blocks, P, o); res.semAltura = !!best.semAltura; return res;
 }
 
 // monta o resultado (celulas, caixa, camadas) a partir dos blocos; serve para o automatico e para o manual
@@ -404,7 +406,8 @@ function sugerida(r) {
   const pad = !CAIXAS.length ? '<span class="mut">calculando caixas padrão…</span>'
     : c ? `<span><b>Usa a Caixa ${c.id}</b> (${c.W} × ${c.L} × ${c.H} mm) · folga de ${Math.round((1 - r.W * r.L / (c.W * c.L)) * 100)}% na planta</span>`
     : `<span class="warn"><b>Não cabe em nenhuma caixa padrão</b> — pediria uma nova de ${up5(r.W)} × ${up5(r.L)} × ${up5(r.H)} mm</span>`;
-  return `<span><b>Caixa sugerida:</b> ${up5(r.W)} × ${up5(r.L)} × ${up5(r.H)} mm · ${forma}</span><span>ocupação ${Math.round(r.fill * 100)}%</span>${pad}`;
+  const av = r.semAltura ? `<span class="warn">Com ${opts().altura} peças na altura não fecha bem (muito espaço vazio) — usei o melhor encaixe.</span>` : '';
+  return av + `<span><b>Caixa sugerida:</b> ${up5(r.W)} × ${up5(r.L)} × ${up5(r.H)} mm · ${forma}</span><span>ocupação ${Math.round(r.fill * 100)}%</span>${pad}`;
 }
 
 function calcCaixas() {
@@ -467,8 +470,11 @@ function sugestoes() {
   (function passo() {
     if (tok !== _sugTok) return;
     if (i >= tarefas.length) { if (!SUG.length) $('sugs').innerHTML = '<span class="mut">sem sugestões</span>'; return; }
-    const [nome, fn] = tarefas[i++];
+    const [nome, fn, cx] = tarefas[i++];
     let r = null; try { r = fn(); } catch (e) { r = null; }
+    // nao sugerir caixa com muito espaco vazio nem proporcao extrema
+    if (r && (r.fill < .72 || Math.max(r.W, r.L) / Math.min(r.W, r.L) > 3.2)) r = null;
+    if (r && cx && (r.fill * r.W * r.L) / (cx.W * cx.L) < .55) r = null;   // produto pequeno demais para essa caixa
     if (r) {
       const sig = `${Math.round(r.W)}x${Math.round(r.L)}|` + r.blocks.map(b => `${b.tipo}${b.layer}${Math.round(b.x)},${Math.round(b.y)}${b.rot ? 'r' : ''}`).sort().join(';');
       if (!vistos.has(sig) && (nome.startsWith('Na Caixa') ? SUG.filter(s => s.caixa).length < 3 : true)) {
