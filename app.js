@@ -68,9 +68,14 @@ function blockOptionsFine(g, P, o, W, k) {
 
 // encaixa blocos no canto inferior esquerdo; devolve L e as celulas posicionadas
 const ORDENS = [(x, y) => y.h - x.h || y.w - x.w, (x, y) => y.w - x.w || y.h - x.h, (x, y) => y.w * y.h - x.w * x.h];
+// familia fisica de uma peca: produtos parecidos (mesmo formato, sabor diferente) ficam sempre juntos
+const familia = t => String(t).split('_')[0];
 function placeBlocks(blocks, W, ord = 0) {
   const rects = [], out = []; let L = 0;
-  for (const b of [...blocks].sort(ORDENS[ord])) {
+  const areaF = {}; blocks.forEach(b => { const f = familia(b.g.tipo); areaF[f] = (areaF[f] || 0) + b.w * b.h; });
+  const rank = Object.keys(areaF).sort((x, y) => areaF[y] - areaF[x]);
+  const ordem = [...blocks].sort((x, y) => rank.indexOf(familia(x.g.tipo)) - rank.indexOf(familia(y.g.tipo)) || ORDENS[ord](x, y));
+  for (const b of ordem) {
     let bx = -1, by = Infinity;
     for (const x of [0, ...rects.map(r => r.x + r.w)]) {
       if (x + b.w > W + 1e-9) continue;
@@ -79,13 +84,20 @@ function placeBlocks(blocks, W, ord = 0) {
       if (y < by - 1e-9 || (Math.abs(y - by) < 1e-9 && x < bx)) { by = y; bx = x; }
     }
     if (bx < 0) return null;
-    rects.push({ x: bx, y: by, w: b.w, h: b.h });
+    rects.push({ x: bx, y: by, w: b.w, h: b.h, f: familia(b.g.tipo) });
     L = Math.max(L, by + b.h);
     out.push({ tipo: b.g.tipo, qtd: b.g.qtd, rot: b.rot, cols: b.cols, x: bx, y: by });
   }
   // regularidade: blocos alinhados (poucas linhas e colunas de partida) = organizacao logica, como na caixa real
   const uy = new Set(out.map(b => Math.round(b.y))).size, ux = new Set(out.map(b => Math.round(b.x))).size;
-  return { blocks: out, L, reg: 1 + .08 * (uy - 1) + .03 * (ux - 1) };
+  // dispersao: area de OUTRAS familias dentro do retangulo de cada familia (produtos parecidos devem ficar juntos)
+  const tot = rects.reduce((s, r) => s + r.w * r.h, 0); let intr = 0;
+  for (const f of new Set(rects.map(r => r.f))) {
+    const mine = rects.filter(r => r.f === f); if (mine.length < 2) continue;
+    const x0 = Math.min(...mine.map(r => r.x)), y0 = Math.min(...mine.map(r => r.y)), x1 = Math.max(...mine.map(r => r.x + r.w)), y1 = Math.max(...mine.map(r => r.y + r.h));
+    for (const r of rects) if (r.f !== f) intr += Math.max(0, Math.min(x1, r.x + r.w) - Math.max(x0, r.x)) * Math.max(0, Math.min(y1, r.y + r.h) - Math.max(y0, r.y));
+  }
+  return { blocks: out, L, reg: 1 + .08 * (uy - 1) + .03 * (ux - 1) + 2 * intr / Math.max(1, tot) };
 }
 
 // melhor arranjo de um conjunto de grupos numa largura W (testa giros e numero de colunas)
