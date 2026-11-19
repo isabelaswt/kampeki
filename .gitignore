@@ -1,0 +1,4 @@
+.DS_Store
+node_modules/
+# fotos originais do cliente e imagens brutas geradas (ficam so na maquina)
+_ref/

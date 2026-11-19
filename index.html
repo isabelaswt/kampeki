@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KAMPEKI — Embalagens</title>
+<style>
+:root{--bg:#f6f4f0;--card:#fff;--ink:#1d1d1b;--mut:#77736b;--line:#e2ddd4;--acc:#c0392b;--brand:#ff8b86;--brand-ink:#141413}
+@media (prefers-color-scheme:dark){:root{--bg:#161615;--card:#212120;--ink:#eee;--mut:#9a958b;--line:#34332f;--acc:#e0645a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,sans-serif;font-weight:400}
+header{padding:18px 24px;background:var(--brand);color:var(--brand-ink);display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+header img{height:26px;width:auto;display:block}
+h1{margin:0;font-size:14px;font-weight:400;letter-spacing:.08em;text-transform:uppercase}
+header p{margin:0;flex-basis:100%;font-size:13px;opacity:.8}
+header b{color:var(--brand-ink);text-decoration:underline}
+html,body{height:100%}
+body{display:flex;flex-direction:column;overflow:hidden}
+header{flex:0 0 auto}
+main{flex:1;min-height:0;display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;padding:20px 24px}
+.col{overflow:auto;min-height:0;padding-right:6px}
+@media(max-width:860px){body{display:block;overflow:auto;height:auto}main{display:block;padding:16px}.col{overflow:visible;margin-bottom:20px}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
+h2{margin:0 0 10px;font-size:12px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0}
+select,input{font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+input[type=number]{width:64px;text-align:right}
+select{max-width:210px}
+table{width:100%;border-collapse:collapse}
+td,th{padding:3px 4px;text-align:right;font-weight:400}
+td:first-child,th:first-child{text-align:left}
+th{color:var(--mut);font-size:11px}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+.dim{font-size:28px;margin:4px 0}
+.dim small{font-size:13px;color:var(--mut)}
+.row{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut)}
+svg{width:100%;height:auto;display:block;background:var(--bg);border-radius:8px}
+.warn{color:var(--acc)}
+button{font:inherit;background:var(--ink);color:var(--bg);border:0;border-radius:6px;padding:7px 12px;cursor:pointer}
+.stage{position:static}
+.frame{width:100%;height:clamp(300px,46vh,520px);display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:8px;overflow:hidden}
+.frame svg{width:100%;height:100%;background:none}
+.tabs{display:flex;gap:6px;margin:10px 0;min-height:30px;align-items:center}
+.tab{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.tab.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.mut{color:var(--mut)}
+.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.sec{background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:5px 10px}
+.sec:disabled{opacity:.4;cursor:default}
+.inl{display:flex;align-items:center;gap:6px;margin:0}
+details{margin:6px 0}
+summary{cursor:pointer}
+.col{display:flex;flex-direction:column;gap:20px}
+</style>
+</head>
+<body>
+<header>
+  <img src="brand/logo.svg" alt="KAMPEKI">
+  <h1>Embalagens · Porto Alegre</h1>
+  <p>Caixa dimensionada a partir das peças de cada combo. Medidas das peças são <b>estimadas</b> (o cardápio não informa) — edite na tabela.</p>
+</header>
+<main>
+  <div class="col">
+    <div class="card">
+      <h2>Produto</h2>
+      <label>Combo <select id="sel"></select></label>
+      <label>Camadas
+        <select id="layers"><option value="1">1 camada</option><option value="2">2 camadas</option></select>
+      </label>
+      <label>Folga entre peças (mm) <input id="gap" type="number" value="0" min="0"></label>
+      <label>Espessura divisória (mm) <input id="wall" type="number" value="2" min="0"></label>
+      <label>Margem da parede (mm) <input id="margin" type="number" value="2" min="0"></label>
+      <label>Folga da tampa (mm) <input id="lid" type="number" value="8" min="0"></label>
+      <label>Proporção máx. (comp/larg) <input id="ratio" type="number" value="1.8" step=".1" min="1"></label>
+    </div>
+    <div class="card">
+      <h2>Medidas das peças (mm, estimadas)</h2>
+      <table id="tbl"></table>
+    </div>
+  </div>
+  <div class="col">
+    <div class="card stage">
+      <h2>Caixa interna · vista de cima</h2>
+      <div class="dim" id="dim"></div>
+      <div class="row" id="sug"></div>
+      <div class="row" id="meta"></div>
+      <div class="tools">
+        <label class="inl">Organização <select id="lay"></select></label>
+        <button id="btnNova" class="sec" title="Copia a organização atual para testar uma variação">+ Nova</button>
+        <button id="btnSq" class="sec">Auto quadrada</button>
+        <button id="btnRe" class="sec">Auto retangular</button>
+        <button id="btnRename" class="sec">Renomear</button>
+        <button id="btnDel" class="sec">Excluir</button>
+      </div>
+      <div class="tools">
+        <button id="btnRot" class="sec">Girar bloco (R)</button>
+        <button id="btnLayer" class="sec">Outra camada</button>
+        <span class="mut">Arraste os blocos; a caixa se ajusta ao que você organizar.</span>
+      </div>
+      <div id="tabs" class="tabs"></div>
+      <div id="views" class="frame"></div>
+    </div>
+    <div class="card">
+      <h2>Caixas padrão (mínimo de caixas)</h2>
+      <label>Aproveitamento mínimo (%) <input id="minfill" type="number" value="40" min="30" max="95"></label>
+      <div id="caixas"><span class="mut">calculando…</span></div>
+    </div>
+    <div class="card">
+      <h2>Todos os produtos</h2>
+      <table id="all"></table>
+    </div>
+  </div>
+</main>
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
