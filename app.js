@@ -26,44 +26,39 @@ function cellsFor(tipo, qtd, P, o, rot) {
   return cells;
 }
 
-// opcoes de bloco para um grupo numa largura W: [{rot, cols, w, h, cells, cw, cd}]
-function blockOptions(g, P, o, W) {
-  const out = [];
-  for (const rot of [false, true]) {
-    const cells = cellsFor(g.tipo, g.qtd, P, o, rot);
-    const cw = Math.max(...cells.map(c => c.w)), cd = Math.max(...cells.map(c => c.d));
-    if (rot && Math.abs(cw - cd) < 2) continue;      // girar peca quadrada nao muda nada
-    const cmax = Math.floor(W / cw + 1e-9);
-    if (cmax < 1) continue;
-    const n = cells.length, rows = Math.ceil(n / cmax), c1 = Math.ceil(n / rows);
-    for (const cols of new Set([c1, cmax > n ? n : cmax])) {
-      const r = Math.ceil(n / cols);
-      const dm = dimsBloco(g.tipo, o, cols, n, cw, cd);
-      out.push({ g, rot, cols, cells, cw, cd, w: dm.w, h: dm.h });
-    }
-  }
-  return out;
+// ---- um bloco por FAMILIA: sabores da mesma peca (ex.: 3 niguiris, 2 uramakis) viram UM retangulo
+// organizado, cada sabor numa faixa propria (empilhados ou lado a lado), como numa caixa montada a mao.
+// Pecas soltas podem formar quadrados (2 x 2, 3 x 2...), nao so fileiras.
+function subDims(g, P, o, rot, cols) {
+  const cells = cellsFor(g.tipo, g.qtd, P, o, rot);
+  const cw = Math.max(...cells.map(c => c.w)), cd = Math.max(...cells.map(c => c.d)), n = cells.length;
+  const c = Math.max(1, Math.min(cols, n)), dm = dimsBloco(g.tipo, o, c, n, cw, cd);
+  return { g, rot, cols: c, n, w: dm.w, h: dm.h, cel: cells.reduce((s, x) => s + x.w * x.d, 0) };
 }
-
-// opcoes finas: todas as formas de bloco com poucas celulas vazias, limitadas a k por grupo
-function blockOptionsFine(g, P, o, W, k) {
-  const out = [];
-  for (const rot of [false, true]) {
-    const cells = cellsFor(g.tipo, g.qtd, P, o, rot);
-    const cw = Math.max(...cells.map(c => c.w)), cd = Math.max(...cells.map(c => c.d));
-    if (rot && Math.abs(cw - cd) < 2) continue;
-    const cmax = Math.floor(W / cw + 1e-9), n = cells.length;
-    const seen = new Set();
-    for (let r = 1; r <= n; r++) {
-      const cols = Math.ceil(n / r);
-      if (cols > cmax || seen.has(cols)) continue;
-      seen.add(cols);
-      const rows = Math.ceil(n / cols);
-      const dm = dimsBloco(g.tipo, o, cols, n, cw, cd);
-      out.push({ g, rot, cols, cells, cw, cd, w: dm.w, h: dm.h, vazio: (cols * rows - n) * cw * cd });
+// opcoes de bloco de uma familia numa largura W, das mais cheias (sem buraco) e quadradas para as menos
+function familyOptions(gs, P, o, W, k) {
+  const out = [], seen = new Set();
+  const add = (subs, w, h) => {
+    if (w > W + 1e-9) return;
+    const key = subs.map(s => `${s.rot}${s.cols},${Math.round(s.dx)},${Math.round(s.dy)}`).join(';');
+    if (seen.has(key)) return; seen.add(key);
+    out.push({ g: subs[0].g, subs, w, h, vazio: w * h - subs.reduce((t, s) => t + s.cel, 0) });
+  };
+  const quadrada = gs.every(g => { const c = cellsFor(g.tipo, 1, P, o, false)[0]; return Math.abs(c.w - c.d) < 2; });
+  for (const rot of quadrada ? [false] : [false, true]) {
+    const ns = gs.map(g => cellsFor(g.tipo, g.qtd, P, o, rot).length), nmax = Math.max(...ns);
+    for (let cols = 1; cols <= nmax; cols++) {   // sabores empilhados, mesmo numero de colunas
+      const subs = gs.map(g => subDims(g, P, o, rot, cols));
+      let y = 0; subs.forEach(s => { s.dx = 0; s.dy = y; y += s.h; });
+      add(subs, Math.max(...subs.map(s => s.w)), y);
+    }
+    if (gs.length > 1) for (let rows = 1; rows <= nmax; rows++) {   // sabores lado a lado, mesmo numero de fileiras
+      const subs = gs.map((g, i) => subDims(g, P, o, rot, Math.ceil(ns[i] / rows)));
+      let x = 0; subs.forEach(s => { s.dx = x; s.dy = 0; x += s.w; });
+      add(subs, x, Math.max(...subs.map(s => s.h)));
     }
   }
-  return out.sort((x, y) => x.vazio - y.vazio || Math.abs(x.w - x.h) - Math.abs(y.w - y.h)).slice(0, k);
+  return out.sort((x, y) => x.vazio - y.vazio || Math.abs(Math.log(x.w / x.h)) - Math.abs(Math.log(y.w / y.h))).slice(0, k);
 }
 
 // encaixa blocos no canto inferior esquerdo; devolve L e as celulas posicionadas
@@ -86,7 +81,7 @@ function placeBlocks(blocks, W, ord = 0) {
     if (bx < 0) return null;
     rects.push({ x: bx, y: by, w: b.w, h: b.h, f: familia(b.g.tipo) });
     L = Math.max(L, by + b.h);
-    out.push({ tipo: b.g.tipo, qtd: b.g.qtd, rot: b.rot, cols: b.cols, x: bx, y: by });
+    for (const u of b.subs || [{ ...b, dx: 0, dy: 0 }]) out.push({ tipo: u.g.tipo, qtd: u.g.qtd, rot: u.rot, cols: u.cols, x: bx + u.dx, y: by + u.dy });
   }
   // regularidade: blocos alinhados (poucas linhas e colunas de partida) = organizacao logica, como na caixa real
   const uy = new Set(out.map(b => Math.round(b.y))).size, ux = new Set(out.map(b => Math.round(b.x))).size;
@@ -102,14 +97,15 @@ function placeBlocks(blocks, W, ord = 0) {
 
 // melhor arranjo de um conjunto de grupos numa largura W (testa giros e numero de colunas)
 function packAt(groups, o, P, W, fino) {
-  const k = fino ? Math.max(3, Math.floor(Math.pow(2500, 1 / groups.length))) : 0;
-  const opts = groups.map(g => fino ? blockOptionsFine(g, P, o, W, k) : blockOptions(g, P, o, W));
+  const fams = Object.values(groups.reduce((m, g) => ((m[familia(g.tipo)] ||= []).push(g), m), {}));
+  const k = fino ? Math.max(3, Math.floor(Math.pow(2500, 1 / fams.length))) : 4;
+  const opts = fams.map(gs => familyOptions(gs, P, o, W, k));
   if (opts.some(x => !x.length)) return null;
-  // muitos produtos num combo: so os 2 maiores grupos testam giro/colunas; os outros ficam no arranjo padrao
-  if (opts.reduce((p, x) => p * x.length, 1) > 300) {
-    const top = groups.map((g, i) => [i, g.qtd]).sort((x, y) => y[1] - x[1]).slice(0, 2).map(x => x[0]);
-    opts.forEach((x, i) => { if (!top.includes(i)) opts[i] = x.slice(0, 1); });
-  }
+  // muitas familias: as menores testam menos formas (as maiores decidem a caixa)
+  const area = fams.map(gs => gs.reduce((s, g) => s + cellsFor(g.tipo, g.qtd, P, o, false).reduce((t, c) => t + c.w * c.d, 0), 0));
+  const ordem = area.map((a, i) => [a, i]).sort((x, y) => x[0] - y[0]).map(x => x[1]);
+  for (const lim of [2, 1]) for (const i of ordem) if (opts.reduce((p, x) => p * x.length, 1) > (fino ? 2500 : 300)) opts[i] = opts[i].slice(0, lim);
+  groups = fams;
   let best = null;
   const pick = new Array(groups.length);
   (function rec(i) {
@@ -141,7 +137,15 @@ function mkBlock(g, P, o, rot, cols) {
 }
 function linhas(groups, P, o, strat) {
   const R = typeof strat === 'number' ? strat : 0;   // R = quantas pecas cabem na altura da caixa
-  const blocks = groups.map(g => mkBlock(g, P, o, false, R ? Math.max(1, Math.ceil(cellsFor(g.tipo, g.qtd, P, o, false).length / R)) : strat === 'row' ? 'n' : 1));
+  const fams = Object.values(groups.reduce((m, g) => ((m[familia(g.tipo)] ||= []).push(g), m), {}));
+  // sabores da mesma familia ficam juntos: fileiras empilhadas (row) ou colunas lado a lado (col / N na altura)
+  const blocks = fams.map(gs => {
+    const subs = gs.map(g => mkBlock(g, P, o, false, R ? Math.max(1, Math.ceil(cellsFor(g.tipo, g.qtd, P, o, false).length / R)) : strat === 'row' ? 'n' : 1));
+    if (subs.length === 1) return subs[0];
+    const vert = strat === 'row'; let acc = 0;
+    subs.forEach(u => { u.dx = vert ? 0 : acc; u.dy = vert ? acc : 0; acc += vert ? u.h : u.w; });
+    return { g: subs[0].g, subs, w: vert ? Math.max(...subs.map(u => u.w)) : acc, h: vert ? acc : Math.max(...subs.map(u => u.h)) };
+  });
   const W = strat === 'row' ? Math.max(...blocks.map(b => b.w)) : blocks.reduce((s, b) => s + b.w, 0);
   const r = placeBlocks(blocks, W);
   return r && { ...r, W };
@@ -157,7 +161,8 @@ function packLayers(layers, o, P, fino, faixa) {
     const reg = rs.reduce((s, r) => s + r.reg, 0) / rs.length;
     if (alinhado && rs.reduce((s, r) => s + r.area, 0) / rs.length / Math.max(1, W * L) < .7) return;   // nao sugerir caixa com muito espaco vazio
     // fileiras/colunas de produtos iguais (como na caixa real) aceitam uma caixa mais comprida
-    const score = W * L * shape(W, L, alinhado ? { ...o, ratio: Math.max(o.ratio, 3.2) } : o) * reg;
+    // (so no automatico: quando a forma e pedida - quadrada/retangular - a proporcao vale para todas)
+    const score = W * L * shape(W, L, alinhado && !o.forma ? { ...o, ratio: Math.max(o.ratio, 3.2) } : o) * reg;
     if (!best || score < best.score - 1) best = { rs, W, L, score };
   };
   for (let W = Math.max(Math.ceil(minW), w0); W <= w1 && !o.altura; W += passo) {
@@ -212,7 +217,7 @@ function variantsOf(prod, o, P) {
       });
     }
   } else variants = [[groups]];
-  return variants;
+  return variants.length ? variants : [[groups]];   // uma fileira so (ex.: 8 hossomakis) nao divide em 2 camadas
 }
 
 function build0(prod, o, P) {
@@ -460,8 +465,8 @@ function sugestoes() {
   SUG = []; $('sugs').innerHTML = '<span class="mut">pensando em organizações…</span>';
   const tarefas = [
     ['Mais compacta', () => build(prod, o, P)],
-    ['Quadrada', () => build0(prod, { ...o, ratio: 1.05, peso: 4 }, P)],
-    ['Retangular', () => build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4 }, P)],
+    ['Quadrada', () => build0(prod, { ...o, ratio: 1.05, peso: 4, forma: 'q' }, P)],
+    ['Retangular', () => build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4, forma: 'r' }, P)],
     ['Uma fileira por produto', () => linhasResult(prod, o, 'row')],
     ['Uma coluna por produto', () => linhasResult(prod, o, 'col')],
   ];
@@ -476,6 +481,12 @@ function sugestoes() {
     if (r && (r.fill < .72 || Math.max(r.W, r.L) / Math.min(r.W, r.L) > 3.2)) r = null;
     if (r && cx && (r.fill * r.W * r.L) / (cx.W * cx.L) < .55) r = null;   // produto pequeno demais para essa caixa
     if (r) {
+      // o nome diz o que a caixa E, nao o que foi pedido: "Quadrada" que saiu retangular nao entra
+      const ratio = Math.max(r.W, r.L) / Math.min(r.W, r.L);
+      if (nome === 'Quadrada' && ratio > 1.15) r = null;
+      if (nome === 'Retangular' && ratio < 1.15) r = null;
+    }
+    if (r) {
       const sig = `${Math.round(r.W)}x${Math.round(r.L)}|` + r.blocks.map(b => `${b.tipo}${b.layer}${Math.round(b.x)},${Math.round(b.y)}${b.rot ? 'r' : ''}`).sort().join(';');
       if (!vistos.has(sig) && (nome.startsWith('Na Caixa') ? SUG.filter(s => s.caixa).length < 3 : true)) {
         vistos.add(sig); SUG.push({ nome, r, caixa: nome.startsWith('Na Caixa') });
@@ -483,7 +494,8 @@ function sugestoes() {
     }
     $('sugs').innerHTML = SUG.map((s, k) => {
       const c = CAIXAS.length ? caixaPara(up5(s.r.W), up5(s.r.L), up5(s.r.H)) : null;
-      return `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span>${Math.round(s.r.W)} × ${Math.round(s.r.L)} × ${Math.round(s.r.H)} mm · ${Math.round(s.r.fill * 100)}%</span><span class="mut">${c ? 'Caixa ' + c.id : 'sem caixa padrão'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
+      const rt = Math.max(s.r.W, s.r.L) / Math.min(s.r.W, s.r.L), fm = rt < 1.15 ? 'quadrada' : `retangular 1 : ${rt.toFixed(1).replace('.', ',')}`;
+      return `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">${fm}</span><span>${Math.round(s.r.W)} × ${Math.round(s.r.L)} × ${Math.round(s.r.H)} mm · ${Math.round(s.r.fill * 100)}%</span><span class="mut">${c ? 'Caixa ' + c.id : 'sem caixa padrão'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
     }).join('');
     setTimeout(passo, 0);
   })();
@@ -719,8 +731,8 @@ document.addEventListener('keydown', e => {
 // organizacoes
 $('lay').addEventListener('input', () => { const { prod, o } = cur(); slotOf(prod, o).idx = +$('lay').value; sel.clear(); saveLays(); render(); });
 $('btnNova').addEventListener('click', () => { novaOrg(lastR.blocks); sel.clear(); render(); });
-$('btnSq').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 1.05, peso: 4 }, P).blocks, 'Auto quadrada'); sel.clear(); layerIdx = 0; render(); });
-$('btnRe').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4 }, P).blocks, 'Auto retangular'); sel.clear(); layerIdx = 0; render(); });
+$('btnSq').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 1.05, peso: 4, forma: 'q' }, P).blocks, 'Auto quadrada'); sel.clear(); layerIdx = 0; render(); });
+$('btnRe').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4, forma: 'r' }, P).blocks, 'Auto retangular'); sel.clear(); layerIdx = 0; render(); });
 $('btnRename').addEventListener('click', () => {
   const { prod, o } = cur(), it = slotOf(prod, o).items[slotOf(prod, o).idx]; if (!it) return;
   const n = prompt('Nome da organização:', it.nome); if (n && n.trim()) { it.nome = n.trim(); saveLays(); render(); }
