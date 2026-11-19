@@ -50,6 +50,10 @@ button{font:inherit;background:var(--ink);color:var(--bg);border:0;border-radius
 .inl{display:flex;align-items:center;gap:6px;margin:0}
 details{margin:6px 0}
 summary{cursor:pointer}
+.sugs{display:flex;gap:8px;overflow-x:auto;padding:6px 0 10px}
+.sg{flex:0 0 176px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px;text-align:left;color:var(--ink);display:flex;flex-direction:column;gap:2px;font-size:12px}
+.sg svg{width:100%;height:auto;display:block}
+.sg:hover{border-color:var(--brand)}
 .col{display:flex;flex-direction:column;gap:20px}
 </style>
 </head>
@@ -95,8 +99,10 @@ summary{cursor:pointer}
       <div class="tools">
         <button id="btnRot" class="sec">Girar bloco (R)</button>
         <button id="btnLayer" class="sec">Outra camada</button>
-        <span class="mut">Arraste os blocos; a caixa se ajusta ao que você organizar.</span>
+        <span id="hint" class="mut"></span>
       </div>
+      <div class="mut" style="margin-top:8px">Sugestões — clique para usar (depois dá para ajustar)</div>
+      <div id="sugs" class="sugs"></div>
       <div id="tabs" class="tabs"></div>
       <div id="views" class="frame"></div>
     </div>

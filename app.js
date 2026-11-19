@@ -317,7 +317,8 @@ function shapeSVG(c, x, y, p, s, id) {
 const STORE = 'kampeki-orgs-v1';
 let LAYS = {}; try { LAYS = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { LAYS = {}; }
 const saveLays = () => { try { localStorage.setItem(STORE, JSON.stringify(LAYS)); } catch (e) { /* sem armazenamento */ } };
-let selBid = null, lastR = null, lastS = 1, lastGeo = null, lastKeys = new Set(), drag = null;
+const sel = new Set();
+let lastR = null, lastS = 1, lastGeo = null, lastKeys = new Set(), drag = null;
 const cur = () => ({ o: opts(), prod: PRODUTOS[$('sel').value] });
 const slotOf = (prod, o) => (LAYS[prod.nome + '|' + o.layers] ||= { idx: -1, items: [] });
 const plain = bl => bl.map(({ id, tipo, qtd, rot, cols, x, y, layer }) => ({ id, tipo, qtd, rot, cols, x, y, layer }));
@@ -384,7 +385,80 @@ function calcCaixas() {
   $('caixas').innerHTML = `<p class="mut">${CAIXAS.length} caixas atendem ${PRODUTOS.length} produtos (aproveitamento mínimo de ${Math.round(minFill * 100)}% da planta e da altura; o produto pode ser reorganizado para caber).</p>` +
     CAIXAS.map(c => `<details><summary><b>Caixa ${c.id}</b> · ${c.W} × ${c.L} × ${c.H} mm · ${c.produtos.length} produto(s)</summary><div class="mut">${c.produtos.join(' · ')}</div></details>`).join('');
   if (lastR) $('sug').innerHTML = sugerida(lastR);
+  sugestoes();
 }
+
+// ---- sugestoes de organizacao: o app propoe, voce escolhe -----------------------------------
+let SUG = [], _sugTok = 0;
+function linhasResult(prod, o, strat) {   // um produto por fileira (row) ou por coluna (col)
+  let best = null;
+  for (const v of variantsOf(prod, o, P)) {
+    const rs = v.map(l => linhas(l, P, o, strat));
+    if (rs.some(r => !r)) continue;
+    const W = Math.max(...rs.map(r => r.W)), L = Math.max(...rs.map(r => r.L));
+    if (W < L - 1e-9) continue;   // caixa na horizontal
+    if (!best || W * L < best.s) best = { rs, s: W * L };
+  }
+  if (!best) return null;
+  return assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
+}
+function layoutNaCaixa(prod, o, c) {   // rearranja o produto para caber DENTRO da caixa padrao
+  const m = 2 * o.margin - o.gap; let best = null;
+  for (const v of variantsOf(prod, o, P)) {
+    const rs = v.map(l => packAt(l, o, P, c.W - m, true));
+    if (rs.some(r => !r)) continue;
+    const L = Math.max(...rs.map(r => r.L)) + m;
+    if (L <= c.L + 1e-6 && (!best || L < best.L)) best = { rs, L };
+  }
+  if (!best) return null;
+  return assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
+}
+function miniSVG(r, o, w = 168, h = 112) {
+  const s = Math.min((w - 8) / r.W, (h - 8) / r.L), ox = (w - r.W * s) / 2, oy = (h - r.L * s) / 2;
+  const cells = r.packs[0].placed.map((c, i) => {
+    const p = P[c.tipo], fw = (c.rot ? c.od : c.ow) * s, fd = (c.rot ? c.ow : c.od) * s;
+    const x = ox + (o.margin + c.x) * s, y = oy + (o.margin + c.y) * s;
+    if (!c.rot) return shapeSVG(c, x, y, p, s, 'm' + i);
+    const cx = x + fw / 2, cy = y + fd / 2;
+    return `<g transform="rotate(90 ${cx} ${cy})">${shapeSVG(c, cx - c.ow * s / 2, cy - c.od * s / 2, p, s, 'm' + i)}</g>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}"><rect x="${ox}" y="${oy}" width="${r.W * s}" height="${r.L * s}" fill="none" stroke="#ff8b86" stroke-width="1.5" rx="2"/>${cells}</svg>`;
+}
+function sugestoes() {
+  const tok = ++_sugTok, { prod, o } = cur();
+  SUG = []; $('sugs').innerHTML = '<span class="mut">pensando em organizações…</span>';
+  const tarefas = [
+    ['Mais compacta', () => build(prod, o, P)],
+    ['Quadrada', () => build0(prod, { ...o, ratio: 1.05, peso: 4 }, P)],
+    ['Retangular', () => build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4 }, P)],
+    ['Uma fileira por produto', () => linhasResult(prod, o, 'row')],
+    ['Uma coluna por produto', () => linhasResult(prod, o, 'col')],
+  ];
+  CAIXAS.filter(c => { const n = { pr: prod, oo: o, W: 0, L: 0, H: 0 }; return true; }).slice(0, 14).forEach(c => tarefas.push([`Na Caixa ${c.id} (${c.W}×${c.L})`, () => layoutNaCaixa(prod, o, c), c]));
+  const vistos = new Set(); let i = 0;
+  (function passo() {
+    if (tok !== _sugTok) return;
+    if (i >= tarefas.length) { if (!SUG.length) $('sugs').innerHTML = '<span class="mut">sem sugestões</span>'; return; }
+    const [nome, fn] = tarefas[i++];
+    let r = null; try { r = fn(); } catch (e) { r = null; }
+    if (r) {
+      const sig = `${Math.round(r.W)}x${Math.round(r.L)}|` + r.blocks.map(b => `${b.tipo}${b.layer}${Math.round(b.x)},${Math.round(b.y)}${b.rot ? 'r' : ''}`).sort().join(';');
+      if (!vistos.has(sig) && (nome.startsWith('Na Caixa') ? SUG.filter(s => s.caixa).length < 3 : true)) {
+        vistos.add(sig); SUG.push({ nome, r, caixa: nome.startsWith('Na Caixa') });
+      }
+    }
+    $('sugs').innerHTML = SUG.map((s, k) => {
+      const c = CAIXAS.length ? caixaPara(up5(s.r.W), up5(s.r.L), up5(s.r.H)) : null;
+      return `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span>${Math.round(s.r.W)} × ${Math.round(s.r.L)} × ${Math.round(s.r.H)} mm · ${Math.round(s.r.fill * 100)}%</span><span class="mut">${c ? 'Caixa ' + c.id : 'sem caixa padrão'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
+    }).join('');
+    setTimeout(passo, 0);
+  })();
+}
+$('sugs').addEventListener('click', e => {
+  const b = e.target.closest('.sg'); if (!b) return;
+  const s = SUG[+b.dataset.k]; if (!s) return;
+  sel.clear(); layerIdx = 0; novaOrg(s.r.blocks, s.nome); render();
+});
 
 function stageSVG(r, o, opt = {}) {
   const li = Math.min(layerIdx, r.packs.length - 1), pack = r.packs[li];
@@ -409,10 +483,10 @@ function stageSVG(r, o, opt = {}) {
   lastKeys = new Set(Object.keys(byB));
   let slots = '', floats = '';
   const blocos = Object.entries(byB).map(([bid, parts]) => {
-    const g = geo[bid], on = bid === selBid;
+    const g = geo[bid], on = sel.has(bid);
     const rx = g.x, ry = g.y;
     const grp = `<g class="blk" data-bid="${bid}">${parts.join('')}<rect class="hit" data-bid="${bid}" x="${rx}" y="${ry}" width="${g.w}" height="${g.h}" fill="transparent" ${on ? 'stroke="#141413" stroke-dasharray="5 3" stroke-width="1.5"' : ''} style="cursor:grab"/></g>`;
-    if (opt.floatId === bid) {   // area destacada onde a peca vai entrar + a peca acompanhando o cursor
+    if (opt.floatIds && opt.floatIds.has(bid)) {   // area destacada onde a peca vai entrar + a peca acompanhando o cursor
       slots += `<rect x="${rx}" y="${ry}" width="${g.w}" height="${g.h}" rx="6" fill="rgba(255,139,134,.30)" stroke="#ff8b86" stroke-width="2" stroke-dasharray="6 3"/>`;
       floats += `<g transform="translate(${opt.fx},${opt.fy})" opacity=".85" style="pointer-events:none">${grp}</g>`;
       return '';
@@ -440,8 +514,10 @@ function render() {
   $('tabs').innerHTML = r.packs.length > 1 ? r.packs.map((p, i) => `<button class="tab ${i === layerIdx ? 'on' : ''}" data-i="${i}">Camada ${i + 1} · alt. ${fmt(r.hs[i])} mm</button>`).join('') : `<span class="mut">Altura das peças ${fmt(r.hs[0])} mm</span>`;
   $('lay').innerHTML = `<option value="-1">Automático</option>` + sl.items.map((it, i) => `<option value="${i}">${it.nome.replace(/</g, '&lt;')}</option>`).join('');
   $('lay').value = String(sl.idx);
-  $('btnRot').disabled = !selBid || !lastKeys.has(selBid);
-  $('btnLayer').disabled = !selBid || !lastKeys.has(selBid) || o.layers < 2;
+  const nSel = [...sel].filter(k => lastKeys.has(k)).length;
+  $('btnRot').disabled = !nSel;
+  $('btnLayer').disabled = !nSel || o.layers < 2;
+  $('hint').textContent = nSel ? `${nSel} selecionado(s) · arraste para mover juntos · R gira · Esc limpa` : 'Arraste para organizar · Shift/⌘+clique ou arraste no fundo seleciona vários · R ou duplo clique gira';
   $('btnRename').disabled = $('btnDel').disabled = sl.idx < 0;
   $('views').innerHTML = stageSVG(r, o);
   tabelaTodos(o);
@@ -462,19 +538,19 @@ function tabelaTodos(o) {
     i++; if (i >= PRODUTOS.length) setTimeout(calcCaixas, 0); else setTimeout(passo, 0);
   })();
 }
-$('tabs').addEventListener('click', e => { if (e.target.dataset.i) { layerIdx = +e.target.dataset.i; render(); } });
+$('tabs').addEventListener('click', e => { if (e.target.dataset.i) { layerIdx = +e.target.dataset.i; sel.clear(); render(); } });
 
-// arrastar: a peca entra ao lado de outra e a vizinha e empurrada; a area destacada mostra onde ela vai entrar
-function empurrar(bl, id, x, y, eixo, sinal) {
+// arrastar (uma ou varias pecas selecionadas): a peca entra ao lado de outra e a vizinha e empurrada;
+// a area destacada mostra onde ela vai entrar
+function empurrar(bl, movidos, eixo, sinal) {
   const { o } = cur(), G = {};
   bl.forEach(b => { const g = geomBlock(b, P, o); G[b.id] = { w: g.w, h: g.h }; });
-  const m = bl.find(b => b.id === id); m.x = x; m.y = y;
   const R = b => ({ x: b.x, y: b.y, w: G[b.id].w, h: G[b.id].h });
-  const fila = [m]; let guarda = 0;
-  while (fila.length && guarda++ < 500) {
+  const fila = bl.filter(b => movidos.has(b.id)); let guarda = 0;
+  while (fila.length && guarda++ < 3000) {
     const a = fila.shift(), ra = R(a);
     for (const b of bl) {
-      if (b === m || b === a || b.layer !== m.layer) continue;
+      if (movidos.has(b.id) || b === a || b.layer !== a.layer) continue;
       const rb = R(b); if (!hit(ra, rb)) continue;
       if (eixo === 'x') b.x = sinal > 0 ? ra.x + ra.w : ra.x - rb.w; else b.y = sinal > 0 ? ra.y + ra.h : ra.y - rb.h;
       fila.push(b);
@@ -482,43 +558,70 @@ function empurrar(bl, id, x, y, eixo, sinal) {
   }
   return bl;
 }
+const laco = document.createElement('div');
+laco.style.cssText = 'position:fixed;display:none;border:1.5px dashed #141413;background:rgba(255,139,134,.18);pointer-events:none;z-index:50';
+document.body.appendChild(laco);
 $('views').addEventListener('pointerdown', e => {
-  const h = e.target.closest('.hit'); if (!h) return;
-  selBid = h.dataset.bid;
-  const svg = $('views').querySelector('svg'), a = svg.getScreenCTM().a;
-  drag = { bid: selBid, sx: e.clientX, sy: e.clientY, k: 1 / (a * lastS), lock: { ...lastGeo }, moved: false, b: null, prop: null, raf: 0 };
+  const svg = $('views').querySelector('svg'); if (!svg) return;
+  const h = e.target.closest('.hit'), a = svg.getScreenCTM().a, add = e.shiftKey || e.metaKey || e.ctrlKey;
   try { $('views').setPointerCapture(e.pointerId); } catch (err) { /* sem captura: segue sem */ }
+  if (!h) {   // fundo: laco de selecao
+    drag = { marquee: true, sx: e.clientX, sy: e.clientY, add };
+    if (!add) sel.clear();
+    return;
+  }
+  const id = h.dataset.bid;
+  if (add) { sel.has(id) ? sel.delete(id) : sel.add(id); drag = null; render(); return; }
+  if (!sel.has(id)) { sel.clear(); sel.add(id); }
+  drag = { bid: id, sx: e.clientX, sy: e.clientY, k: 1 / (a * lastS), lock: { ...lastGeo }, moved: false, b: null, prop: null, raf: 0 };
 });
 $('views').addEventListener('pointermove', e => {
   if (!drag) return;
+  if (drag.marquee) {
+    const x0 = Math.min(drag.sx, e.clientX), y0 = Math.min(drag.sy, e.clientY), x1 = Math.max(drag.sx, e.clientX), y1 = Math.max(drag.sy, e.clientY);
+    Object.assign(laco.style, { display: 'block', left: x0 + 'px', top: y0 + 'px', width: x1 - x0 + 'px', height: y1 - y0 + 'px' });
+    drag.box = [x0, y0, x1, y1]; return;
+  }
   const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
   if (!drag.moved && Math.hypot(dx, dy) < 4) return;
   drag.cx = e.clientX; drag.cy = e.clientY;
   if (drag.raf) return;
-  drag.raf = requestAnimationFrame(() => { drag.raf = 0; if (drag) arrasto(); });
+  drag.raf = requestAnimationFrame(() => { drag.raf = 0; if (drag && !drag.marquee) arrasto(); });
 });
 function arrasto() {
   const { o } = cur(), dx = drag.cx - drag.sx, dy = drag.cy - drag.sy;
   if (!drag.b) {   // primeiro movimento: garante organizacao editavel e congela os dados do arraste
-    const bl = editBlocks(); drag.bl = bl; drag.b = bl.find(x => x.id === drag.bid);
-    drag.base = bl.map(b => ({ ...b })); drag.x0 = drag.b.x; drag.y0 = drag.b.y; drag.moved = true;
+    const bl = editBlocks(); drag.bl = bl;
+    drag.base = bl.map(b => ({ ...b }));
+    drag.ids = new Set([...sel].filter(id => bl.some(b => b.id === id)));
+    drag.b = drag.base.find(b => b.id === drag.bid);
+    if (!drag.b) { drag = null; return; }
+    drag.ids.add(drag.bid); drag.x0 = drag.b.x; drag.y0 = drag.b.y; drag.moved = true;
     drag.ge = {}; drag.base.forEach(b => { const g = geomBlock(b, P, o); drag.ge[b.id] = { w: g.w, h: g.h }; });
   }
-  const m = drag.base.find(b => b.id === drag.bid), g = drag.ge[m.id];
-  const os = drag.base.filter(x => x.id !== m.id && x.layer === m.layer).map(x => ({ ...x, ...drag.ge[x.id] }));
+  const m = drag.b, g = drag.ge[m.id];
+  const os = drag.base.filter(x => !drag.ids.has(x.id) && x.layer === m.layer).map(x => ({ ...x, ...drag.ge[x.id] }));
   const T = 5, snap = (v, c) => { let best = v, d = T; for (const q of c) if (Math.abs(q - v) < d) { d = Math.abs(q - v); best = q; } return best; };
   const px = drag.x0 + dx * drag.k, py = drag.y0 + dy * drag.k;   // posicao livre do cursor (mm)
   const nx = snap(px, os.flatMap(q => [q.x, q.x + q.w, q.x + q.w - g.w, q.x - g.w])), ny = snap(py, os.flatMap(q => [q.y, q.y + q.h, q.y + q.h - g.h, q.y - g.h]));
   const eixo = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y', sinal = (eixo === 'x' ? dx : dy) >= 0 ? 1 : -1;
-  const prop = empurrar(drag.base.map(b => ({ ...b })), m.id, nx, ny, eixo, sinal);
+  const prop = drag.base.map(b => ({ ...b }));
+  prop.forEach(b => { if (drag.ids.has(b.id)) { b.x += nx - drag.x0; b.y += ny - drag.y0; } });
+  empurrar(prop, drag.ids, eixo, sinal);
   drag.prop = prop;
   const r2 = assemble(prop, P, o);
-  $('views').innerHTML = stageSVG(r2, o, { lock: drag.lock, floatId: m.id, fx: (px - nx) * drag.lock.s, fy: (py - ny) * drag.lock.s });
+  $('views').innerHTML = stageSVG(r2, o, { lock: drag.lock, floatIds: drag.ids, fx: (px - nx) * drag.lock.s, fy: (py - ny) * drag.lock.s });
 }
 const endDrag = () => {
   if (!drag) return;
   const d = drag; drag = null;
-  if (d.moved && d.prop) {
+  if (d.marquee) {
+    laco.style.display = 'none';
+    if (d.box) {
+      const [x0, y0, x1, y1] = d.box;
+      $('views').querySelectorAll('.hit').forEach(h => { const b = h.getBoundingClientRect(); if (b.right > x0 && b.left < x1 && b.bottom > y0 && b.top < y1) sel.add(h.dataset.bid); });
+    }
+  } else if (d.moved && d.prop) {
     d.prop.forEach(p => { const b = d.bl.find(x => x.id === p.id); if (b) { b.x = p.x; b.y = p.y; } });
     normalize(d.bl); saveLays();
   }
@@ -527,45 +630,70 @@ const endDrag = () => {
 $('views').addEventListener('pointerup', endDrag);
 $('views').addEventListener('pointercancel', endDrag);
 
-// girar / mudar de camada
+// girar a selecao (uma ou varias pecas, em torno do centro do conjunto) / mudar de camada
+function selecionados(bl) { return bl.filter(b => sel.has(b.id)); }
 function girar() {
-  if (!selBid || !lastKeys.has(selBid)) return;
-  const { o } = cur(), bl = editBlocks(), b = bl.find(x => x.id === selBid); if (!b) return;
-  const ant = { ...b };
-  b.rot = !b.rot;
-  const g = geomBlock(b, P, o), outros = bl.filter(x => x.id !== b.id && x.layer === b.layer).map(x => ({ ...x, ...geomBlock(x, P, o) }));
-  if (outros.some(q => hit({ x: b.x, y: b.y, w: g.w, h: g.h }, q))) {
-    const p = livre(b, bl, o); if (!p) { Object.assign(b, ant); render(); return; }
-    b.x = p.x; b.y = p.y;
-  }
+  if (![...sel].some(k => lastKeys.has(k))) return;
+  const { o } = cur(), bl = editBlocks(), alvos = selecionados(bl); if (!alvos.length) return;
+  const geo = {}; alvos.forEach(b => { geo[b.id] = geomBlock(b, P, o); });
+  const antes = bl.map(b => ({ ...b }));
+  const bx = Math.min(...alvos.map(b => b.x)), by = Math.min(...alvos.map(b => b.y));
+  const BH = Math.max(...alvos.map(b => b.y + geo[b.id].h)) - by;
+  alvos.forEach(b => {
+    const g = geo[b.id], n = g.cells.length, linhas = Math.ceil(n / b.cols), rx = b.x - bx, ry = b.y - by;
+    if (alvos.length > 1) { b.x = bx + (BH - ry - g.h); b.y = by + rx; }   // 90 graus horario em torno do conjunto
+    b.rot = !b.rot; b.cols = linhas;                                       // a grade da peca tambem gira
+  });
+  empurrar(bl, new Set(alvos.map(b => b.id)), 'x', 1);                     // o que ficar no caminho e empurrado
   normalize(bl); saveLays(); render();
 }
 function outraCamada() {
-  const { o } = cur(); if (!selBid || o.layers < 2) return;
-  const bl = editBlocks(), b = bl.find(x => x.id === selBid); if (!b) return;
-  b.layer = (b.layer + 1) % 2;
-  b.id = ROLL(b.tipo) ? `${b.tipo}#${b.layer}` : `${b.tipo}#${b.layer}:m${Date.now() % 100000}`;
-  while (bl.some(x => x !== b && x.id === b.id)) b.id += '+';
-  selBid = b.id; layerIdx = b.layer;
-  const p = livre(b, bl, o); b.x = p ? p.x : 0; b.y = p ? p.y : 0;
-  normalize(bl); saveLays(); render();
+  const { o } = cur(); if (o.layers < 2 || ![...sel].some(k => lastKeys.has(k))) return;
+  const bl = editBlocks(), alvos = selecionados(bl); if (!alvos.length) return;
+  const dest = (alvos[0].layer + 1) % 2, geo = {};
+  alvos.forEach(b => { geo[b.id] = geomBlock(b, P, o); });
+  const bx = Math.min(...alvos.map(b => b.x)), by = Math.min(...alvos.map(b => b.y));
+  const W = Math.max(...alvos.map(b => b.x + geo[b.id].w)) - bx, H = Math.max(...alvos.map(b => b.y + geo[b.id].h)) - by;
+  const rel = alvos.map(b => ({ b, dx: b.x - bx, dy: b.y - by }));
+  const obst = bl.filter(b => b.layer === dest).map(b => ({ x: b.x, y: b.y, ...(({ w, h }) => ({ w, h }))(geomBlock(b, P, o)) }));
+  const xs = [0, ...obst.map(q => q.x + q.w)], ys = [0, ...obst.map(q => q.y + q.h)];
+  let pos = null;
+  for (const y of ys) for (const x of xs) {
+    if (obst.some(q => hit({ x, y, w: W, h: H }, q))) continue;
+    if (!pos || y < pos.y - .01 || (Math.abs(y - pos.y) < .01 && x < pos.x)) pos = { x, y };
+  }
+  pos = pos || { x: 0, y: 0 };
+  sel.clear();
+  rel.forEach(({ b, dx, dy }, i) => {
+    b.layer = dest; b.x = pos.x + dx; b.y = pos.y + dy;
+    b.id = ROLL(b.tipo) ? `${b.tipo}#${dest}` : `${b.tipo}#${dest}:m${Date.now() % 100000}_${i}`;
+    while (bl.some(x => x !== b && x.id === b.id)) b.id += '+';
+    sel.add(b.id);
+  });
+  layerIdx = dest; normalize(bl); saveLays(); render();
 }
 $('btnRot').addEventListener('click', girar);
 $('btnLayer').addEventListener('click', outraCamada);
-document.addEventListener('keydown', e => { if ((e.key === 'r' || e.key === 'R') && !/INPUT|SELECT|TEXTAREA/.test((e.target.tagName || '')) && !e.metaKey && !e.ctrlKey) girar(); });
+$('views').addEventListener('dblclick', e => { const h = e.target.closest('.hit'); if (h) { sel.clear(); sel.add(h.dataset.bid); girar(); } });
+document.addEventListener('keydown', e => {
+  if (/INPUT|SELECT|TEXTAREA/.test(e.target.tagName || '') || e.altKey) return;
+  if ((e.key === 'r' || e.key === 'R') && !e.metaKey && !e.ctrlKey) girar();
+  else if (e.key === 'Escape') { sel.clear(); render(); }
+  else if ((e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); lastKeys.forEach(k => sel.add(k)); render(); }
+});
 
 // organizacoes
-$('lay').addEventListener('input', () => { const { prod, o } = cur(); slotOf(prod, o).idx = +$('lay').value; selBid = null; saveLays(); render(); });
-$('btnNova').addEventListener('click', () => { novaOrg(lastR.blocks); selBid = null; render(); });
-$('btnSq').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 1.05, peso: 4 }, P).blocks, 'Auto quadrada'); selBid = null; layerIdx = 0; render(); });
-$('btnRe').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4 }, P).blocks, 'Auto retangular'); selBid = null; layerIdx = 0; render(); });
+$('lay').addEventListener('input', () => { const { prod, o } = cur(); slotOf(prod, o).idx = +$('lay').value; sel.clear(); saveLays(); render(); });
+$('btnNova').addEventListener('click', () => { novaOrg(lastR.blocks); sel.clear(); render(); });
+$('btnSq').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 1.05, peso: 4 }, P).blocks, 'Auto quadrada'); sel.clear(); layerIdx = 0; render(); });
+$('btnRe').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4 }, P).blocks, 'Auto retangular'); sel.clear(); layerIdx = 0; render(); });
 $('btnRename').addEventListener('click', () => {
   const { prod, o } = cur(), it = slotOf(prod, o).items[slotOf(prod, o).idx]; if (!it) return;
   const n = prompt('Nome da organização:', it.nome); if (n && n.trim()) { it.nome = n.trim(); saveLays(); render(); }
 });
 $('btnDel').addEventListener('click', () => {
   const { prod, o } = cur(), sl = slotOf(prod, o); if (sl.idx < 0) return;
-  sl.items.splice(sl.idx, 1); sl.idx = -1; selBid = null; saveLays(); render();
+  sl.items.splice(sl.idx, 1); sl.idx = -1; sel.clear(); saveLays(); render();
 });
 
 $('sel').innerHTML = ['Combos', 'Avulsos'].map(g =>
@@ -573,8 +701,8 @@ $('sel').innerHTML = ['Combos', 'Avulsos'].map(g =>
 $('tbl').innerHTML = '<tr><th>Peça</th><th>Larg</th><th>Prof</th><th>Alt</th></tr>' + Object.entries(P).map(([k, p]) =>
   `<tr><td><span class="sw" style="background:${p.cor}"></span>${p.nome}</td>` +
   ['w', 'd', 'h'].map(f => `<td><input type="number" data-k="${k}" data-f="${f}" value="${p[f]}" min="5"></td>`).join('') + '</tr>').join('');
-$('tbl').addEventListener('input', e => { const t = e.target; if (t.dataset.k) { P[t.dataset.k][t.dataset.f] = +t.value || 5; render(); } });
+$('tbl').addEventListener('input', e => { const t = e.target; if (t.dataset.k) { P[t.dataset.k][t.dataset.f] = +t.value || 5; render(); sugestoes(); } });
 $('minfill').addEventListener('input', () => { if (CAIXAS.length) calcCaixas(); });
-['sel', 'layers', 'gap', 'wall', 'margin', 'lid', 'ratio'].forEach(id => $(id).addEventListener('input', () => { selBid = null; render(); }));
+['sel', 'layers', 'gap', 'wall', 'margin', 'lid', 'ratio'].forEach(id => $(id).addEventListener('input', () => { sel.clear(); render(); sugestoes(); }));
 $('sel').value = PRODUTOS.findIndex(p => p.nome.startsWith('Combo Exclusivo'));
 render();

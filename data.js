@@ -7,12 +7,13 @@
 (function () {
   const V = (grupo, base, lista) => Object.fromEntries(lista.map(([k, nome, cor]) => [`${grupo}_${k}`, { ...base, nome, cor }]));
 
+  // ROLLS (uramaki, gunkan, hot, hossomaki, futomaki) com tamanhos aproximados entre si (~40 mm; hossomaki ~30)
   // uramaki: roll de salmao (ou arroz por fora, nos vegetarianos); vendido em fileiras; a foto e UMA peca repetida
-  const URAMAKI = V('uramaki', { w: 42, d: 39, h: 32, perCell: 5, step: 30 }, [
+  const URAMAKI = V('uramaki', { w: 40, d: 37, h: 32, perCell: 5, step: 28 }, [
     ['filadelfia', 'Uramaki filadélfia', '#f0a58a'], ['palha', 'Uramaki palha doce', '#e0a84a'], ['shake_ebi', 'Uramaki shake ebi', '#e8815a'],
     ['poro', 'Uramaki alho-poró', '#c9b26a'], ['skin', 'Uramaki shake skin', '#b07a4a'], ['ebi', 'Uramaki ebi', '#e3946a'],
     ['brocolis', 'Uramaki brócolis', '#7fa06a'], ['shimeji', 'Uramaki shimeji', '#8a6a4f'], ['ebi_tuna', 'Uramaki ebi tuna', '#a8323e']]);
-  const HOSSO = V('hosso', { w: 24, d: 24, h: 26, perCell: 8, step: 13 }, [
+  const HOSSO = V('hosso', { w: 30, d: 30, h: 28, perCell: 8, step: 16 }, [
     ['filadelfia', 'Hossomaki filadélfia', '#8fb58a'], ['salmao', 'Hossomaki salmão', '#7fa58a'],
     ['ebi', 'Hossomaki ebi', '#9fb08a'], ['kappa', 'Hossomaki kappa (pepino)', '#6f9a7a']]);
   const HOT = V('hot', { w: 40, d: 39, h: 32, perCell: 1 }, [
@@ -25,7 +26,7 @@
     ['ebi', 'Niguiri ebi', '#e0885a'], ['poro', 'Niguiri salmão poró', '#c9b26a']]);
   Object.keys(NIGIRI).forEach(k => { const [w, dd] = NIGIRI_DIM[k.slice(7)]; NIGIRI[k].w = w; NIGIRI[k].d = dd; });
   // gunkan: redondo, enrolado em salmao, mesma forma do roll; muda so a cobertura
-  const GUNKAN = V('gunkan', { w: 42, d: 39, h: 38, perCell: 1 }, [
+  const GUNKAN = V('gunkan', { w: 40, d: 37, h: 38, perCell: 1 }, [
     ['salmao', 'Gunkan salmão / trufado', '#e8a07a'], ['filadelfia', 'Gunkan filadélfia', '#f0d9c8'], ['tamago', 'Gunkan tamagô', '#e9c46a'],
     ['palha', 'Gunkan palha doce', '#d9a441'], ['poro', 'Gunkan alho-poró', '#c7b26a'], ['shimeji', 'Gunkan shimeji', '#8a6a4f'],
     ['ebi', 'Gunkan ebi', '#d9894a'], ['gorgonzola', 'Gunkan gorgonzola', '#e6dcc8'], ['atum', 'Gunkan atum alho negro', '#a8323e'],
@@ -33,7 +34,7 @@
 
   window.PIECES = {
     ...NIGIRI, ...GUNKAN, ...HOSSO, ...URAMAKI, ...HOT,
-    futo:     { nome: 'Futomaki shake tuna', w: 48, d: 48, h: 40, perCell: 1, cor: '#9aa6c9' },
+    futo:     { nome: 'Futomaki shake tuna', w: 44, d: 44, h: 40, perCell: 1, cor: '#9aa6c9' },
     shake:    { nome: 'Shake (sem arroz)',   w: 34, d: 40, h: 30, perCell: 1, cor: '#e58f7a' },
     sashimi:  { nome: 'Sashimi (lâmina)',    w: 17, d: 53, h: 16, perCell: 12, step: 8, cor: '#f2b8a2' }, // 6 ou 12 lâminas: 1 fileira
     porcao:   { nome: 'Porção (copo)',       w: 70, d: 70, h: 40, perCell: 1, cor: '#b7c7d6' },
