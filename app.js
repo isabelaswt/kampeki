@@ -5,6 +5,17 @@ const PRODUTOS = [...COMBOS.map(c => ({ ...c, grupo: 'Combos' })), ...AVULSOS.ma
 // Cada tipo de peca vira UM bloco retangular (colunas x linhas, peças coladas). Os blocos sao
 // encaixados no canto inferior esquerdo, sem folga. Cada bloco pode girar 90 graus.
 
+// pecas redondas (hot, gunkan) em bloco: fileiras alternadas, uma encaixada na outra ("apertado", como na caixa real)
+const HEX = .866;
+const hexOk = (tipo, o, cols, rows) => o.hex !== false && /^(hot|gunkan)_/.test(tipo) && cols > 1 && rows > 1;
+function dimsBloco(tipo, o, cols, n, cw, cd) {
+  const rows = Math.ceil(n / cols), normal = { w: cols * cw, h: rows * cd };
+  if (!hexOk(tipo, o, cols, rows)) return { hex: false, rows, ...normal };
+  const apertado = { w: cols * cw + cw / 2, h: cd * (1 + (rows - 1) * HEX) };
+  const hex = apertado.w * apertado.h < normal.w * normal.h - 1;   // so alterna as fileiras se a area realmente diminuir
+  return { hex, rows, ...(hex ? apertado : normal) };
+}
+
 function cellsFor(tipo, qtd, P, o, rot) {
   const p = P[tipo], cells = [];
   for (let q = qtd; q > 0; q -= p.perCell) {
@@ -27,7 +38,8 @@ function blockOptions(g, P, o, W) {
     const n = cells.length, rows = Math.ceil(n / cmax), c1 = Math.ceil(n / rows);
     for (const cols of new Set([c1, cmax > n ? n : cmax])) {
       const r = Math.ceil(n / cols);
-      out.push({ g, rot, cols, cells, cw, cd, w: cols * cw, h: r * cd });
+      const dm = dimsBloco(g.tipo, o, cols, n, cw, cd);
+      out.push({ g, rot, cols, cells, cw, cd, w: dm.w, h: dm.h });
     }
   }
   return out;
@@ -47,7 +59,8 @@ function blockOptionsFine(g, P, o, W, k) {
       if (cols > cmax || seen.has(cols)) continue;
       seen.add(cols);
       const rows = Math.ceil(n / cols);
-      out.push({ g, rot, cols, cells, cw, cd, w: cols * cw, h: rows * cd, vazio: (cols * rows - n) * cw * cd });
+      const dm = dimsBloco(g.tipo, o, cols, n, cw, cd);
+      out.push({ g, rot, cols, cells, cw, cd, w: dm.w, h: dm.h, vazio: (cols * rows - n) * cw * cd });
     }
   }
   return out.sort((x, y) => x.vazio - y.vazio || Math.abs(x.w - x.h) - Math.abs(y.w - y.h)).slice(0, k);
@@ -111,10 +124,12 @@ function mkBlock(g, P, o, rot, cols) {
   const cells = cellsFor(g.tipo, g.qtd, P, o, rot);
   const cw = Math.max(...cells.map(c => c.w)), cd = Math.max(...cells.map(c => c.d)), n = cells.length;
   const c = cols === 'n' ? n : Math.min(cols, n);
-  return { g, rot, cols: c, cells, cw, cd, w: c * cw, h: Math.ceil(n / c) * cd };
+  const dm = dimsBloco(g.tipo, o, c, n, cw, cd);
+  return { g, rot, cols: c, cells, cw, cd, w: dm.w, h: dm.h };
 }
 function linhas(groups, P, o, strat) {
-  const blocks = groups.map(g => mkBlock(g, P, o, false, strat === 'row' ? 'n' : 1));
+  const R = typeof strat === 'number' ? strat : 0;   // R = quantas pecas cabem na altura da caixa
+  const blocks = groups.map(g => mkBlock(g, P, o, false, R ? Math.max(1, Math.ceil(cellsFor(g.tipo, g.qtd, P, o, false).length / R)) : strat === 'row' ? 'n' : 1));
   const W = strat === 'row' ? Math.max(...blocks.map(b => b.w)) : blocks.reduce((s, b) => s + b.w, 0);
   const r = placeBlocks(blocks, W);
   return r && { ...r, W };
@@ -132,11 +147,11 @@ function packLayers(layers, o, P, fino, faixa) {
     const score = W * L * shape(W, L, alinhado ? { ...o, ratio: Math.max(o.ratio, 3.2) } : o) * reg;
     if (!best || score < best.score - 1) best = { rs, W, L, score };
   };
-  for (let W = Math.max(Math.ceil(minW), w0); W <= w1; W += passo) {
+  for (let W = Math.max(Math.ceil(minW), w0); W <= w1 && !o.altura; W += passo) {
     const rs = layers.map(l => packAt(l, o, P, W, fino));
     if (!rs.some(r => !r)) consider(rs, W);
   }
-  if (!faixa) for (const strat of ['col', 'row']) {   // candidatos alinhados
+  if (!faixa) for (const strat of o.altura ? [+o.altura] : ['col', 'row', 2, 3, 4, 5, 6, 7, 8]) {   // candidatos alinhados (N pecas na altura)
     const rs = layers.map(l => linhas(l, P, o, strat));
     if (!rs.some(r => !r)) consider(rs, Math.max(...rs.map(r => r.W)), true);
   }
@@ -203,7 +218,8 @@ function build0(prod, o, P) {
 function geomBlock(b, P, o) {
   const cells = cellsFor(b.tipo, b.qtd, P, o, b.rot);
   const cw = Math.max(...cells.map(c => c.w)), cd = Math.max(...cells.map(c => c.d));
-  return { cells, cw, cd, w: b.cols * cw, h: Math.ceil(cells.length / b.cols) * cd };
+  const dm = dimsBloco(b.tipo, o, b.cols, cells.length, cw, cd);
+  return { cells, cw, cd, w: dm.w, h: dm.h, hex: dm.hex };
 }
 
 function assemble(blocks, P, o) {
@@ -213,7 +229,7 @@ function assemble(blocks, P, o) {
   for (const b of blocks) {
     const g = geomBlock(b, P, o);
     ge[b.id] = { x: b.x, y: b.y, w: g.w, h: g.h, layer: b.layer };
-    g.cells.forEach((c, i) => packs[b.layer].placed.push({ ...c, bid: b.id, ci: i, x: b.x + (i % b.cols) * g.cw, y: b.y + Math.floor(i / b.cols) * g.cd }));
+    g.cells.forEach((c, i) => { const fila = Math.floor(i / b.cols); packs[b.layer].placed.push({ ...c, bid: b.id, ci: i, x: b.x + (i % b.cols) * g.cw + (g.hex && fila % 2 ? g.cw / 2 : 0), y: b.y + fila * g.cd * (g.hex ? HEX : 1) }); });
     W = Math.max(W, b.x + g.w); L = Math.max(L, b.y + g.h);
     area += g.cells.reduce((s, c) => s + c.ow * c.od, 0); n += g.cells.length;
   }
@@ -243,7 +259,7 @@ const cabeCaixa = (n, c, minFill, o, P) =>
 // escolhe o MENOR numero de caixas (cobertura gulosa) que comporta todos os produtos
 function escolherCaixas(prods, o, P, minFill) {
   const need = prods.map(pr => {
-    const oo = { ...o, layers: Object.values(pr.itens).reduce((s, v) => s + v, 0) > 30 ? 2 : 1 };
+    const oo = { ...o, layers: pr.camadas || 1 };
     const b = build(pr, oo, P);
     return { pr, oo, nome: pr.nome, W: up5(b.W), L: up5(b.L), H: up5(b.H) };
   });
@@ -268,7 +284,7 @@ function escolherCaixas(prods, o, P, minFill) {
 const P = JSON.parse(JSON.stringify(PIECES));
 function opts() {
   return {
-    layers: +$('layers').value, gap: +$('gap').value, wall: +$('wall').value,
+    layers: +$('layers').value, altura: +$('altura').value || 0, gap: +$('gap').value, wall: +$('wall').value,
     margin: +$('margin').value, lid: +$('lid').value, ratio: +$('ratio').value || 1.8,
   };
 }
@@ -526,13 +542,13 @@ let _tok = 0;
 function tabelaTodos(o) {
   const tok = ++_tok;
   $('all').innerHTML = '<tr><th>Produto</th><th>Larg</th><th>Comp</th><th>Alt</th></tr>' + PRODUTOS.map((pr, i) => {
-    const l = Object.values(pr.itens).reduce((a, b) => a + b, 0) > 30 ? 2 : 1;
+    const l = pr.camadas || 1;
     return `<tr data-i="${i}"><td>${pr.nome}${l === 2 ? ' · 2 cam.' : ''}</td><td>…</td><td></td><td></td></tr>`;
   }).join('');
   let i = 0;
   (function passo() {
     if (tok !== _tok || i >= PRODUTOS.length) return;
-    const pr = PRODUTOS[i], oo = { ...o, layers: Object.values(pr.itens).reduce((a, b) => a + b, 0) > 30 ? 2 : 1 };
+    const pr = PRODUTOS[i], oo = { ...o, layers: pr.camadas || 1 };
     const b = build(pr, oo, P), tr = $('all').querySelector(`tr[data-i="${i}"]`);
     if (tr) tr.innerHTML = `<td>${pr.nome}${oo.layers === 2 ? ' · 2 cam.' : ''}</td><td>${fmt(b.W)}</td><td>${fmt(b.L)}</td><td>${fmt(b.H)}</td>`;
     i++; if (i >= PRODUTOS.length) setTimeout(calcCaixas, 0); else setTimeout(passo, 0);
@@ -703,6 +719,6 @@ $('tbl').innerHTML = '<tr><th>Peça</th><th>Larg</th><th>Prof</th><th>Alt</th></
   ['w', 'd', 'h'].map(f => `<td><input type="number" data-k="${k}" data-f="${f}" value="${p[f]}" min="5"></td>`).join('') + '</tr>').join('');
 $('tbl').addEventListener('input', e => { const t = e.target; if (t.dataset.k) { P[t.dataset.k][t.dataset.f] = +t.value || 5; render(); sugestoes(); } });
 $('minfill').addEventListener('input', () => { if (CAIXAS.length) calcCaixas(); });
-['sel', 'layers', 'gap', 'wall', 'margin', 'lid', 'ratio'].forEach(id => $(id).addEventListener('input', () => { sel.clear(); render(); sugestoes(); }));
+['sel', 'layers', 'altura', 'gap', 'wall', 'margin', 'lid', 'ratio'].forEach(id => $(id).addEventListener('input', () => { sel.clear(); render(); sugestoes(); }));
 $('sel').value = PRODUTOS.findIndex(p => p.nome.startsWith('Combo Exclusivo'));
 render();

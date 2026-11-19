@@ -71,11 +71,12 @@ summary{cursor:pointer}
       <label>Camadas
         <select id="layers"><option value="1">1 camada</option><option value="2">2 camadas</option></select>
       </label>
-      <label>Folga entre peças (mm) <input id="gap" type="number" value="0" min="0"></label>
+      <label>Folga entre peças (mm) <input id="gap" type="number" value="0" min="-10"></label>
       <label>Espessura divisória (mm) <input id="wall" type="number" value="2" min="0"></label>
       <label>Margem da parede (mm) <input id="margin" type="number" value="2" min="0"></label>
       <label>Folga da tampa (mm) <input id="lid" type="number" value="8" min="0"></label>
       <label>Proporção máx. (comp/larg) <input id="ratio" type="number" value="1.8" step=".1" min="1"></label>
+      <label>Peças na altura (opcional) <input id="altura" type="number" value="" min="1" max="12" placeholder="auto"></label>
     </div>
     <div class="card">
       <h2>Medidas das peças (mm, estimadas)</h2>
