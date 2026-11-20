@@ -312,8 +312,9 @@ const fmt = n => Math.round(n);
 // ---- vista de cima: area fixa, escala automatica, medidas reais -------------
 const FORMA = new Proxy({ nigiri: 'rect', hosso: 'circle', uramaki: 'circle', hot: 'circle', futo: 'circle', shake: 'circle', sashimi: 'rect', porcao: 'circle', crispy: 'circle', oniguiri: 'tri' }, { get: (o, k) => o[k] || (String(k).startsWith('gunkan') ? 'circle' : 'circle') });
 const PHOTO = {};   // tipo -> [l,t,r,b] fracoes do PNG ocupadas pela peca (img/meta.json); sombra fica fora
-fetch('img/meta.json').then(r => r.json()).then(m => Object.entries(m).forEach(([t, b]) => {
-  const im = new Image(); im.onload = () => { PHOTO[t] = b; render(); }; im.src = `img/${t}.webp`;
+const IMGV = '20261120c';   // subir junto com o ?v= do index.html quando trocar imagens (o navegador guarda as antigas)
+fetch(`img/meta.json?v=${IMGV}`).then(r => r.json()).then(m => Object.entries(m).forEach(([t, b]) => {
+  const im = new Image(); im.onload = () => { PHOTO[t] = b; render(); }; im.src = `img/${t}.webp?v=${IMGV}`;
 })).catch(() => {});
 let layerIdx = 0;
 const VW = 640, VH = 440, PAD = 46;
@@ -321,7 +322,7 @@ const VW = 640, VH = 440, PAD = 46;
 // foto recortada: a peca (bbox) cobre EXATAMENTE a pegada x,y,w,d; a sombra transborda por fora
 function photo(tipo, x, y, w, d) {
   const [l, t, r, b] = PHOTO[tipo], fw = w / (r - l), fh = d / (b - t);
-  return `<image href="img/${tipo}.webp" x="${x - l * fw}" y="${y - t * fh}" width="${fw}" height="${fh}" preserveAspectRatio="none" style="filter:drop-shadow(0 .5px .6px rgba(0,0,0,.6)) drop-shadow(0 1.6px 2.2px rgba(0,0,0,.22))"/>`;
+  return `<image href="img/${tipo}.webp?v=${IMGV}" x="${x - l * fw}" y="${y - t * fh}" width="${fw}" height="${fh}" preserveAspectRatio="none" style="filter:drop-shadow(0 .5px .6px rgba(0,0,0,.6)) drop-shadow(0 1.6px 2.2px rgba(0,0,0,.22))"/>`;
 }
 
 function shapeSVG(c, x, y, p, s, id) {

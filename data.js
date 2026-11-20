@@ -9,7 +9,7 @@
 
   // ROLLS (uramaki, gunkan, hot, hossomaki, futomaki) com tamanhos aproximados entre si (~40 mm; hossomaki ~30)
   // uramaki: roll de salmao (ou arroz por fora, nos vegetarianos); vendido em fileiras; a foto e UMA peca repetida
-  const URAMAKI = V('uramaki', { w: 40, d: 37, h: 32, perCell: 5, step: 28 }, [
+  const URAMAKI = V('uramaki', { w: 40, d: 40, h: 32, perCell: 5, step: 28 }, [   // peca redonda (circulo inteiro)
     ['filadelfia', 'Uramaki filadélfia', '#f0a58a'], ['palha', 'Uramaki palha doce', '#e0a84a'], ['shake_ebi', 'Uramaki shake ebi', '#e8815a'],
     ['poro', 'Uramaki alho-poró', '#c9b26a'], ['skin', 'Uramaki shake skin', '#b07a4a'], ['ebi', 'Uramaki ebi', '#e3946a'],
     ['brocolis', 'Uramaki brócolis', '#7fa06a'], ['shimeji', 'Uramaki shimeji', '#8a6a4f'], ['ebi_tuna', 'Uramaki ebi tuna', '#a8323e']]);
@@ -20,14 +20,15 @@
   const HOT = V('hot', { w: 40, d: 39, h: 32, perCell: 1 }, [
     ['filadelfia', 'Hot filadélfia', '#c9a46a'], ['poro', 'Hot poró', '#c9b26a'], ['couve', 'Hot couve', '#9aa46a'],
     ['salmao', 'Hot salmão', '#d9946a'], ['lemon', 'Hot gunkan lemon', '#d9c46a'], ['shimeji', 'Hot shimeji', '#a58a6a']]);
-  const NIGIRI_DIM = {"atum": [60, 23.4], "barriga": [60, 22.9], "ebi": [60, 24.4], "poro": [52, 25.5], "salmao": [60, 23.3], "skin": [60, 23.7], "tamago": [60, 22.7], "vieira": [52, 25.2]};
+  const NIGIRI_DIM = {"atum": [60, 23.4], "barriga": [60, 22.9], "ebi": [60, 24.4], "poro": [52, 25.5], "salmao": [60, 23.3], "skin": [60, 23.7], "tamago": [60, 22.7], "vieira": [52, 25.2], "shake_ebi": [58, 20.4]};
   const NIGIRI = V('nigiri', { w: 60, d: 23, h: 32, perCell: 1 }, [
     ['salmao', 'Niguiri salmão', '#e8a07a'], ['barriga', 'Niguiri barriga de salmão', '#e89a7a'], ['atum', 'Niguiri atum', '#a8323e'],
     ['skin', 'Niguiri skin', '#8a5a3a'], ['tamago', 'Niguiri shake tamagô', '#e9c46a'], ['vieira', 'Niguiri vieira', '#f2e6d0'],
-    ['ebi', 'Niguiri ebi', '#e0885a'], ['poro', 'Niguiri salmão poró', '#c9b26a']]);
+    ['ebi', 'Niguiri ebi', '#e0885a'], ['poro', 'Niguiri salmão poró', '#c9b26a'],
+    ['shake_ebi', 'Niguiri shake ebi (sem arroz)', '#e8815a']]);   // base de salmao no lugar do arroz
   Object.keys(NIGIRI).forEach(k => { const [w, dd] = NIGIRI_DIM[k.slice(7)]; NIGIRI[k].w = w; NIGIRI[k].d = dd; });
   // gunkan: redondo, enrolado em salmao, mesma forma do roll; muda so a cobertura
-  const GUNKAN = V('gunkan', { w: 40, d: 37, h: 38, perCell: 1 }, [
+  const GUNKAN = V('gunkan', { w: 40, d: 40, h: 38, perCell: 1 }, [
     ['salmao', 'Gunkan salmão / trufado', '#e8a07a'], ['filadelfia', 'Gunkan filadélfia', '#f0d9c8'], ['tamago', 'Gunkan tamagô', '#e9c46a'],
     ['palha', 'Gunkan palha doce', '#d9a441'], ['poro', 'Gunkan alho-poró', '#c7b26a'], ['shimeji', 'Gunkan shimeji', '#8a6a4f'],
     ['ebi', 'Gunkan ebi', '#d9894a'], ['gorgonzola', 'Gunkan gorgonzola', '#e6dcc8'], ['atum', 'Gunkan atum alho negro', '#a8323e'],
@@ -36,7 +37,13 @@
   window.PIECES = {
     ...NIGIRI, ...GUNKAN, ...HOSSO, ...URAMAKI, ...HOT,
     futo:     { nome: 'Futomaki shake tuna', w: 44, d: 44, h: 40, perCell: 1, cor: '#9aa6c9' },
-    shake:    { nome: 'Shake (sem arroz)',   w: 34, d: 40, h: 30, perCell: 1, cor: '#e58f7a' },
+    // shakes: salmao macaricado envolvendo o recheio, SEM arroz (cardapio "Sushis sem arroz")
+    shake_ebi:            { nome: 'Shake ebi',            w: 33, d: 40, h: 30, perCell: 1, cor: '#e58f7a' },
+    shake_ebi_tamago:     { nome: 'Shake ebi tamagô',     w: 38, d: 40, h: 30, perCell: 1, cor: '#e9b45a' },
+    shake_brocolis:       { nome: 'Shake brócolis',       w: 34, d: 40, h: 30, perCell: 1, cor: '#8fae6a' },
+    shake_ebi_especial:   { nome: 'Shake ebi especial',   w: 37, d: 40, h: 30, perCell: 1, cor: '#e8815a' },
+    shake_ebi_gorgonzola: { nome: 'Shake ebi gorgonzola', w: 36, d: 40, h: 30, perCell: 1, cor: '#e6dcc8' },
+    shake_shimeji:        { nome: 'Shake shimeji',        w: 38, d: 40, h: 30, perCell: 1, cor: '#8a6a4f' },
     sashimi:  { nome: 'Sashimi (lâmina)',    w: 17, d: 53, h: 16, perCell: 12, step: 8, cor: '#f2b8a2' }, // 6 ou 12 lâminas: 1 fileira
     sashimi_rolinho: { nome: 'Sashimi em rolinho (rosa)', w: 36, d: 36, h: 30, perCell: 1, cor: '#f08a6a' }, // quando vem 4 lâminas: cada uma enrolada
     porcao:   { nome: 'Porção (copo)',       w: 70, d: 70, h: 40, perCell: 1, cor: '#b7c7d6' },
@@ -51,15 +58,15 @@
     { nome: 'Meio Combo Gunkan (10)', itens: { gunkan_palha: 2, gunkan_shimeji: 2, gunkan_ebi: 2, gunkan_gorgonzola: 2, gunkan_poro: 2 } },
     { nome: 'Seleção de Gunkans (16)', itens: { gunkan_salmao: 4, gunkan_atum: 4, gunkan_vieira: 4, gunkan_tamago: 4 } },
     { nome: 'Combo Gunkan (20)', itens: { gunkan_palha: 4, gunkan_shimeji: 4, gunkan_ebi: 4, gunkan_gorgonzola: 4, gunkan_poro: 4 } },
-    { nome: 'Meio Combo Nashi Shari (20)', itens: { sashimi: 8, futo: 4, shake: 6, gunkan_filadelfia: 2 } },
+    { nome: 'Meio Combo Nashi Shari (20)', itens: { sashimi: 8, futo: 4, shake_brocolis: 2, shake_ebi: 2, nigiri_shake_ebi: 2, gunkan_filadelfia: 2 } },
     { nome: 'Meio Combo Salmão (26)', itens: { sashimi: 6, hosso_filadelfia: 4, uramaki_filadelfia: 5, uramaki_palha: 5, nigiri_salmao: 3 /* ~niguiri filadélfia */, gunkan_filadelfia: 3 } },
     { nome: 'Combo Shake Tuna (38)', itens: { nigiri_atum: 4, nigiri_barriga: 4, gunkan_tamago: 4, gunkan_atum: 4, sashimi: 12, uramaki_ebi_tuna: 10, porcao: 1, crispy: 1 } },
-    { nome: 'Combo Nashi Shari (40)', itens: { sashimi: 16, futo: 8, shake: 12, gunkan_filadelfia: 4 } },
+    { nome: 'Combo Nashi Shari (40)', itens: { sashimi: 16, futo: 8, shake_brocolis: 4, shake_ebi: 4, nigiri_shake_ebi: 4, gunkan_filadelfia: 4 } },
     { nome: 'Combo Hot (40)', itens: { hot_filadelfia: 10, hot_poro: 10, hot_couve: 10, hot_salmao: 10 } },
     { nome: 'Combo Vegetariano (40)', itens: { uramaki_brocolis: 8, uramaki_shimeji: 8, hosso_kappa: 8, hot_shimeji: 8, gunkan_shimeji: 8 /* ~gunkan vegetariano da casa */ } },
     { nome: 'Combo Exclusivo (42)', itens: { sashimi: 12, uramaki_palha: 10, uramaki_shake_ebi: 10, nigiri_salmao: 2, nigiri_barriga: 2, nigiri_tamago: 2 /* ~6 variados */, gunkan_filadelfia: 4 } },
     { nome: 'Combo Yuzu (42)', itens: { hot_lemon: 8, uramaki_poro: 10, sashimi: 12, nigiri_ebi: 4, nigiri_barriga: 4, gunkan_filadelfia: 4 } },
-    { nome: 'Combo Ebi (42)', itens: { uramaki_shake_ebi: 10, gunkan_ebi: 10, sashimi: 10, shake: 12 } },
+    { nome: 'Combo Ebi (42)', itens: { uramaki_shake_ebi: 10, gunkan_ebi: 10, sashimi: 10, shake_ebi: 4, shake_ebi_tamago: 4, shake_ebi_especial: 4 } },
     { nome: 'Combo Experiência (48)', itens: { uramaki_palha: 5, uramaki_filadelfia: 10 /* ~salad + filadélfia crispy */, uramaki_skin: 5, nigiri_poro: 6, nigiri_skin: 6, hosso_filadelfia: 8, hot_poro: 8 } },
     { nome: 'Combo Experiência 2.0 (48)', itens: { uramaki_palha: 10, uramaki_skin: 10, hosso_ebi: 8, nigiri_skin: 4, nigiri_poro: 4, gunkan_poro: 4, hot_poro: 8 } },
     { nome: 'Combo Tradicional (48)', itens: { sashimi: 12, uramaki_filadelfia: 10, uramaki_ebi: 10, hosso_salmao: 8, nigiri_salmao: 4, gunkan_salmao: 4 } },
@@ -85,7 +92,8 @@
     av('Niguiri vieira (2)', { nigiri_vieira: 2 }), av('Niguiri ebi (4)', { nigiri_ebi: 4 }),
     ...gun,
     av('Sashimi (6)', { sashimi: 6 }), av('Sashimi (12)', { sashimi: 12 }),
-    av('Shake sem arroz (4)', { shake: 4 }),
+    ...['ebi', 'ebi_tamago', 'brocolis', 'ebi_gorgonzola', 'shimeji', 'ebi_especial'].map(k => av(`${PIECES['shake_' + k].nome} (4)`, { ['shake_' + k]: 4 })),
+    av('Niguiri shake ebi (4)', { nigiri_shake_ebi: 4 }),
     av('Oniguiri (1)', { oniguiri: 1 }),
     // entram sozinhos: o crispy/chips que acompanha e outra embalagem, outra imagem
     av('Ceviche / Tartar (120g)', { porcao: 1 }), av('Crispy / chips (acompanha)', { crispy: 1 }),
