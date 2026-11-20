@@ -561,19 +561,27 @@ function sugerirCaixasNovas(o) {
     if (!best) break;
     props.push(best); folgados = folgados.filter(x => !best.m.includes(x));
   }
-  return props;
+  props.combos = combos; return props;
 }
 function calcCaixas() {
   const o = opts(), minFill = (+$('minfill').value || 40) / 100;
   CAIXAS = escolherCaixas(PRODUTOS, o, P, minFill);
-  $('caixas').innerHTML = `<p class="mut">${CAIXAS.length} caixas atendem ${PRODUTOS.length} produtos (aproveitamento mínimo de ${Math.round(minFill * 100)}% da planta e da altura; o produto pode ser reorganizado para caber; caixas com até ${Math.round(PARECIDA * 100)}% de diferença na planta e ${Math.round(PARECIDA_H * 100)}% na altura viram uma só).</p>` +
-    CAIXAS.map(c => `<details><summary><b>Caixa ${c.id}</b> · ${c.W} × ${c.L} × ${c.H} mm · ${c.produtos.length} produto(s)</summary><div class="mut">${c.produtos.join(' · ')}</div></details>`).join('') +
-    (EXTRAS.length ? `<p class="mut extras">Adicionadas por você: ${EXTRAS.map((c, k) => `${c.W} × ${c.L} × ${c.H} mm <button data-rm="${k}">remover</button>`).join(' · ')}</p>` : '');
   PROPS = sugerirCaixasNovas(o);
-  $('caixas').innerHTML += PROPS.map((p, k) => `<div class="nova"><span class="k">Sugestão de caixa nova</span><span class="v">${p.S.W} × ${p.S.L} × ${p.S.H} mm</span>
-    <span class="d">Atende ${p.m.length} combos que hoje sobram muito na caixa padrão:</span>
-    <ul>${p.m.map(x => `<li>${x.pr.nome} — hoje na Caixa ${x.c ? x.c.id : '?'}, sobra ${Math.round(x.sobra * 100)}% → nesta, sobra ${Math.round((1 - x.area / (p.S.W * p.S.L)) * 100)}%</li>`).join('')}</ul>
-    <button data-add="${k}">Adicionar à linha de caixas</button></div>`).join('');
+  // 1) a pergunta que importa: precisa de mais uma caixa?
+  const pior = [...PROPS.combos].sort((a, b) => b.sobra - a.sobra);
+  const ver = PROPS.length
+    ? `<p class="resp sim"><b>Sim.</b> ${PROPS.reduce((n, p) => n + p.m.length, 0)} combos sobram mais de 25% do fundo na caixa deles e caberiam bem numa caixa nova:</p>` +
+      PROPS.map((p, k) => `<div class="nova"><span class="k">Caixa nova sugerida</span><span class="v">${p.S.W} × ${p.S.L} × ${p.S.H} mm</span>
+        <ul>${p.m.map(x => `<li>${x.pr.nome}: hoje na Caixa ${x.c ? x.c.id : '?'} sobra ${Math.round(x.sobra * 100)}% → nesta sobraria ${Math.round((1 - x.area / (p.S.W * p.S.L)) * 100)}%</li>`).join('')}</ul>
+        <button data-add="${k}">Testar com esta caixa</button></div>`).join('')
+    : `<p class="resp nao"><b>Não.</b> Com ${CAIXAS.length} caixas, nenhum par de combos ganharia uma caixa nova melhor. O que mais sobra é ${pior[0] ? `${pior[0].pr.nome}, com ${Math.round(pior[0].sobra * 100)}% do fundo vazio` : '—'}.</p>`;
+  // 2) sobra de cada combo na caixa padrao dele
+  const tab = `<table class="sobras"><tr><th>Combo</th><th>Caixa</th><th>Sobra</th></tr>${PROPS.combos.map(x => `<tr class="${x.sobra > .25 ? 'alta' : ''}"><td>${x.pr.nome}</td><td>${x.c ? x.c.id : '—'}</td><td>${Math.round(x.sobra * 100)}%</td></tr>`).join('')}</table>`;
+  // 3) a linha de caixas
+  const linha = CAIXAS.map(c => `<details><summary><b>Caixa ${c.id}</b> · ${Math.max(c.W, c.L)} × ${Math.min(c.W, c.L)} × ${c.H} mm · ${c.produtos.length} produto(s)</summary><div class="mut">${c.produtos.join(' · ')}</div></details>`).join('') +
+    (EXTRAS.length ? `<p class="mut extras">Testando (só no seu navegador): ${EXTRAS.map((c, k) => `${c.W} × ${c.L} × ${c.H} mm <button data-rm="${k}">tirar</button>`).join(' · ')}</p>` : '');
+  $('caixas').innerHTML = `<h3 class="sub">Precisa de mais uma caixa?</h3>${ver}<h3 class="sub">Quanto sobra em cada combo</h3>${tab}
+    <h3 class="sub">As ${CAIXAS.length} caixas da linha</h3><p class="mut">Cada produto vai na menor caixa em que cabe (as peças podem ser reorganizadas). Caixas com medidas parecidas (até ${Math.round(PARECIDA * 100)}% na planta e ${Math.round(PARECIDA_H * 100)}% na altura) viram uma só.</p>${linha}`;
   // com a linha pronta, refaz o topo (letra da caixa salva, caixa padrao mais proxima)
   if (lastR) { const { prod, o: oo } = cur(); lastR = result(prod, oo); $('dim').innerHTML = dimHTML(lastR); $('sug').innerHTML = sugerida(lastR); }
   sugestoes();
@@ -593,6 +601,11 @@ function linhasResult(prod, o, strat) {   // um produto por fileira (row) ou por
   if (!best) return null;
   return assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
 }
+// gira a arrumacao 90 graus (troca x e y): cada bloco gira junto e a grade troca linhas por colunas
+function transpor(blocks, o) {
+  const t = blocks.map(b => { const g = geomBlock(b, P, o), rows = Math.ceil(g.cells.length / b.cols); return { ...b, rot: !b.rot, cols: rows, x: b.y, y: b.x }; });
+  return hasOverlap(assemble(t, P, o)) ? null : t;
+}
 function layoutNaCaixa(prod, o, c) {   // rearranja o produto para caber DENTRO da caixa padrao (deitada ou virada)
   const m = 2 * o.margin - o.gap; let best = null;
   for (const vira of [false, true]) {   // virada: a caixa e a mesma, so vista de lado (largura e comprimento trocados)
@@ -605,8 +618,13 @@ function layoutNaCaixa(prod, o, c) {   // rearranja o produto para caber DENTRO 
     }
   }
   if (!best) return null;
-  const r = assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
-  r.caixaVista = best.vista; return r;
+  let blocks = best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), vista = best.vista;
+  if (vista.W < vista.L) {   // montou com a caixa em pe: gira a arrumacao inteira para mostrar a caixa deitada
+    const t = transpor(blocks, o);
+    if (t) { blocks = t; vista = { ...vista, W: vista.L, L: vista.W }; }
+  }
+  const r = assemble(blocks, P, o);
+  r.caixaVista = vista; return r;
 }
 function miniSVG(r, o, w = 168, h = 112) {
   const s = Math.min((w - 8) / (r.W + 2 * PAREDE), (h - 8) / (r.L + 2 * PAREDE)), ox = (w - r.W * s) / 2, oy = (h - r.L * s) / 2;
@@ -619,11 +637,32 @@ function miniSVG(r, o, w = 168, h = 112) {
   }).join('');
   return `<svg viewBox="0 0 ${w} ${h}">${caixaSVG(ox, oy, r.W * s, r.L * s, s)}${cells}</svg>`;
 }
+// coluna da direita em duas abas: 'Nesta caixa' (outras arrumacoes na caixa que esta na tela) e
+// 'Outras caixas' (caixas padrao que servem e formatos sob medida)
+let RAIL = 'mesma', SUG_TIT = {}, BASE_TXT = '';
+function desenharSugs(o) {
+  const lista = SUG.map((s, k) => ({ s, k })).filter(({ s }) => RAIL === 'mesma' ? s.grupo === 'mesma' : s.grupo !== 'mesma');
+  // em 'Outras caixas': primeiro as caixas padrao, depois sob medida
+  lista.sort((a, b) => (a.s.grupo === 'outras') - (b.s.grupo === 'outras') || a.k - b.k);
+  const nOut = SUG.filter(s => s.grupo !== 'mesma').length, nMes = SUG.filter(s => s.grupo === 'mesma').length;
+  $('railNesta').dataset.n = nMes; $('railOutras').dataset.n = nOut;
+  $('railNesta').classList.toggle('on', RAIL === 'mesma'); $('railOutras').classList.toggle('on', RAIL !== 'mesma');
+  $('railNota').textContent = RAIL === 'mesma' ? `A mesma caixa da tela (${BASE_TXT}), com as peças em outra posição. Clique para usar.` : 'Outros tamanhos: caixas padrão onde o combo cabe e formatos sob medida.';
+  if (!lista.length) { $('sugs').innerHTML = `<span class="mut">${RAIL === 'mesma' ? 'Nenhuma outra arrumação cabe nesta caixa.' : 'calculando…'}</span>`; return; }
+  $('sugs').innerHTML = lista.map(({ s, k }, n) => {
+    const h = RAIL !== 'mesma' && (n === 0 || lista[n - 1].s.grupo !== s.grupo) ? `<p class="sg-h">${SUG_TIT[s.grupo] || ''}</p>` : '';
+    if (s.grupo !== 'outras') return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">peças ocupam ${Math.round(s.r.fill * 100)}% do fundo</span></button>`;
+    const c = CAIXAS.length ? caixaPara(up5(s.r.W), up5(s.r.L), up5(s.r.H)) : null;
+    const rt = Math.max(s.r.W, s.r.L) / Math.min(s.r.W, s.r.L), fm = rt < 1.15 ? 'quadrada' : `retangular 1 : ${rt.toFixed(1).replace('.', ',')}`;
+    return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">${fm}</span><span>${up5(s.r.W)} × ${up5(s.r.L)} × ${up5(s.r.H)} mm · peças ocupam ${Math.round(s.r.fill * 100)}%</span><span class="mut">${c ? `cabe na Caixa padrão ${c.id} (${c.W} × ${c.L})` : 'nenhuma caixa padrão serve'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
+  }).join('');
+}
 function sugestoes() {
   const tok = ++_sugTok, { prod, o } = cur();
   SUG = []; $('sugs').innerHTML = '<span class="mut">pensando em organizações…</span>';
   const base = lastR && (lastR.caixa ? lastR : result(prod, o));
-  const titulos = { mesma: base ? `Na mesma caixa · ${Math.round(base.W)} × ${Math.round(base.L)} mm` : 'Na mesma caixa', outras: 'Outros formatos (caixa sob medida)' };
+  SUG_TIT = { outras: 'Sob medida (caixa nova, só para este combo)' }; const titulos = SUG_TIT;
+  BASE_TXT = base ? `${Math.round(base.W)} × ${Math.round(base.L)} mm` : '';
   // cada tarefa devolve uma lista de { nome, r }
   const um = (nome, fn) => () => { const r = fn(); return r ? [{ nome, r }] : []; };
   const tarefas = [
@@ -640,13 +679,13 @@ function sugestoes() {
     if (nPad >= 2) return [];
     const lay = layoutNaCaixa(prod, o, c); if (!lay) return [];
     const b = naCaixa(lay, lay.caixaVista); if (b.fill < .5) return [];
-    nPad++; titulos[`cx:${c.id}`] = `Na Caixa padrão ${c.id} · ${c.W} × ${c.L} mm`;
+    nPad++; titulos[`cx:${c.id}`] = `Caixa padrão ${c.id} · ${Math.max(c.W, c.L)} × ${Math.min(c.W, c.L)} mm`;
     return [{ nome: 'Arrumação automática', r: b }, ...variacoesNaMesmaCaixa(prod, o, b, 4).map((r, n) => ({ nome: `Opção ${n + 1}`, r }))];
   }]));
   const vistos = new Set(); let i = 0;
   (function passo() {
     if (tok !== _sugTok) return;
-    if (i >= tarefas.length) { if (!SUG.length) $('sugs').innerHTML = '<span class="mut">sem sugestões</span>'; return; }
+    if (i >= tarefas.length) { desenharSugs(o); return; }
     const [grupo, fn] = tarefas[i++];
     let lista = []; try { lista = fn() || []; } catch (e) { lista = []; }
     for (let { nome, r } of lista) {
@@ -659,16 +698,11 @@ function sugestoes() {
       if (vistos.has(sig)) continue;
       vistos.add(sig); SUG.push({ nome, r, grupo });
     }
-    $('sugs').innerHTML = SUG.map((s, k) => {
-      const h = (k === 0 || SUG[k - 1].grupo !== s.grupo) ? `<p class="sg-h">${titulos[s.grupo]}</p>` : '';
-      if (s.grupo !== 'outras') return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">peças ocupam ${Math.round(s.r.fill * 100)}% do fundo</span></button>`;
-      const c = CAIXAS.length ? caixaPara(up5(s.r.W), up5(s.r.L), up5(s.r.H)) : null;
-      const rt = Math.max(s.r.W, s.r.L) / Math.min(s.r.W, s.r.L), fm = rt < 1.15 ? 'quadrada' : `retangular 1 : ${rt.toFixed(1).replace('.', ',')}`;
-      return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">${fm}</span><span>medida ideal ${up5(s.r.W)} × ${up5(s.r.L)} × ${up5(s.r.H)} mm · peças ocupam ${Math.round(s.r.fill * 100)}%</span><span class="mut">${c ? `entra na Caixa padrão ${c.id} (${c.W} × ${c.L})` : 'nenhuma caixa padrão serve'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
-    }).join('');
+    desenharSugs(o);
     setTimeout(passo, 0);
   })();
 }
+['railNesta', 'railOutras'].forEach(id => $(id).addEventListener('click', () => { RAIL = id === 'railNesta' ? 'mesma' : 'outras'; desenharSugs(opts()); }));
 $('sugs').addEventListener('click', e => {
   const b = e.target.closest('.sg'); if (!b) return;
   const s = SUG[+b.dataset.k]; if (!s) return;
