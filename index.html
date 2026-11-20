@@ -37,7 +37,7 @@ b{font-weight:500}
 #sel{min-width:260px;font-weight:500}
 .pick select:hover{border-color:var(--ink)}
 
-main{display:grid;grid-template-columns:288px minmax(0,1fr);gap:40px;padding:32px;max-width:1480px;margin:0 auto}
+main{display:grid;grid-template-columns:300px minmax(0,1fr);gap:48px;padding:32px}
 
 /* lateral: ajustes e medidas, sem cartoes */
 aside{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 110px);overflow:auto;padding-right:4px}
@@ -56,6 +56,12 @@ th{color:var(--mut);font-size:12px;border-bottom-color:var(--ink)}
 #tbl td{font-size:13px}
 #tbl input{width:44px}
 .sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+/* avatar: foto da peca num circulo */
+.av{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;overflow:hidden;background:var(--stage);box-shadow:inset 0 0 0 1px var(--line);vertical-align:middle;margin-right:10px}
+.av img{width:100%;height:100%;object-fit:cover;display:block;background:var(--stage)}
+.peca{display:flex;align-items:center;line-height:1.25}
+.legend .av{width:22px;height:22px;margin-right:7px}
+.legend>span{display:inline-flex;align-items:center}
 
 /* palco */
 .stage{min-width:0}
@@ -64,7 +70,7 @@ th{color:var(--mut);font-size:12px;border-bottom-color:var(--ink)}
 .dim small{display:block;margin-top:10px;font-family:var(--sans);font-size:13px;letter-spacing:0;color:var(--mut)}
 .facts{display:flex;flex-wrap:wrap;gap:6px 22px;margin:16px 0 0;font-size:13.5px}
 .facts>span{position:relative}
-.legend{display:flex;flex-wrap:wrap;gap:4px 18px;margin:14px 0 0;font-size:12.5px;color:var(--mut)}
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin:14px 0 0;font-size:12.5px;color:var(--mut)}
 .legend>span{white-space:nowrap}
 .frame{position:relative;margin-top:22px;width:100%;height:clamp(360px,58vh,660px);display:flex;align-items:center;justify-content:center;background:var(--stage);border-radius:var(--r);overflow:hidden}
 .frame svg{width:100%;height:100%;display:block}
@@ -183,7 +189,7 @@ details>div{padding:6px 0 4px 20px;font-size:13px}
     </div>
   </section>
 </main>
-<script src="data.js?v=20261120d"></script>
-<script src="app.js?v=20261120d"></script>
+<script src="data.js?v=20261120f"></script>
+<script src="app.js?v=20261120f"></script>
 </body>
 </html>

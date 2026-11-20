@@ -312,7 +312,9 @@ const fmt = n => Math.round(n);
 // ---- vista de cima: area fixa, escala automatica, medidas reais -------------
 const FORMA = new Proxy({ nigiri: 'rect', hosso: 'circle', uramaki: 'circle', hot: 'circle', futo: 'circle', shake: 'circle', sashimi: 'rect', porcao: 'circle', crispy: 'circle', oniguiri: 'tri' }, { get: (o, k) => o[k] || (String(k).startsWith('gunkan') ? 'circle' : 'circle') });
 const PHOTO = {};   // tipo -> [l,t,r,b] fracoes do PNG ocupadas pela peca (img/meta.json); sombra fica fora
-const IMGV = '20261120c';   // subir junto com o ?v= do index.html quando trocar imagens (o navegador guarda as antigas)
+const IMGV = '20261120c';
+// avatar redondo com a foto da peca (rolls usam a foto _tile); sem foto, fica a bolinha de cor
+const avatar = (k, cor) => `<span class="av" style="background:${cor}"><img src="img/${/^(uramaki|hosso)_/.test(k) ? k + '_tile' : k}.webp?v=${IMGV}" alt="" onerror="this.remove()"></span>`;
 fetch(`img/meta.json?v=${IMGV}`).then(r => r.json()).then(m => Object.entries(m).forEach(([t, b]) => {
   const im = new Image(); im.onload = () => { PHOTO[t] = b; render(); }; im.src = `img/${t}.webp?v=${IMGV}`;
 })).catch(() => {});
@@ -541,7 +543,7 @@ function render() {
   const r = lastR = result(prod, o);
   $('dim').innerHTML = `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>mm (larg × comp × alt, interno)</small>`;
   $('sug').innerHTML = sugerida(r);
-  const tipos = Object.entries(prod.itens).map(([t, q]) => `<span><span class="sw" style="background:${P[t].cor}"></span>${q} ${P[t].nome} · ${P[t].w}×${P[t].d}×${P[t].h}</span>`).join('');
+  const tipos = Object.entries(prod.itens).map(([t, q]) => `<span>${avatar(t, P[t].cor)}${q} ${P[t].nome} · ${P[t].w}×${P[t].d}×${P[t].h}</span>`).join('');
   $('meta').innerHTML = tipos;
   if (layerIdx >= r.packs.length) layerIdx = 0;
   $('tabs').innerHTML = r.packs.length > 1 ? r.packs.map((p, i) => `<button class="tab ${i === layerIdx ? 'on' : ''}" data-i="${i}">Camada ${i + 1} · alt. ${fmt(r.hs[i])} mm</button>`).join('') : `<span class="mut">Altura das peças ${fmt(r.hs[0])} mm</span>`;
@@ -670,7 +672,7 @@ $('btnDel').addEventListener('click', () => {
 $('sel').innerHTML = ['Combos', 'Avulsos'].map(g =>
   `<optgroup label="${g}">${PRODUTOS.map((p, i) => p.grupo === g ? `<option value="${i}">${p.nome}</option>` : '').join('')}</optgroup>`).join('');
 $('tbl').innerHTML = '<tr><th>Peça</th><th>Larg</th><th>Prof</th><th>Alt</th></tr>' + Object.entries(P).map(([k, p]) =>
-  `<tr><td><span class="sw" style="background:${p.cor}"></span>${p.nome}</td>` +
+  `<tr><td><span class="peca">${avatar(k, p.cor)}<span>${p.nome}</span></span></td>` +
   ['w', 'd', 'h'].map(f => `<td><input type="number" data-k="${k}" data-f="${f}" value="${p[f]}" min="5"></td>`).join('') + '</tr>').join('');
 $('tbl').addEventListener('input', e => { const t = e.target; if (t.dataset.k) { P[t.dataset.k][t.dataset.f] = +t.value || 5; render(); sugestoes(); } });
 $('minfill').addEventListener('input', () => { if (CAIXAS.length) calcCaixas(); });
