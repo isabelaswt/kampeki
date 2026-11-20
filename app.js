@@ -368,9 +368,14 @@ const plain = bl => bl.map(({ id, tipo, qtd, rot, cols, x, y, layer }) => ({ id,
 const hit = (a, b) => a.x < b.x + b.w - .01 && a.x + a.w > b.x + .01 && a.y < b.y + b.h - .01 && a.y + a.h > b.y + .01;
 const hasOverlap = r => { const ids = Object.keys(r.ge); return ids.some((i, ix) => ids.slice(ix + 1).some(j => r.ge[i].layer === r.ge[j].layer && hit(r.ge[i], r.ge[j]))); };
 
+// mostra a organizacao DENTRO de uma caixa padrao: a caixa no tamanho real, com o fundo que sobra a vista
+function naCaixa(r, c) {
+  const W = Math.max(r.W, c.W), L = Math.max(r.L, c.L);
+  return { ...r, W, L, H: Math.max(r.H, c.H), fill: r.fill * r.W * r.L / (W * L), caixa: { id: c.id, W: c.W, L: c.L, H: c.H } };
+}
 function result(prod, o) {
   const sl = slotOf(prod, o), it = sl.items[sl.idx];
-  if (it) { const r = assemble(it.blocks, P, o); if (!hasOverlap(r)) return r; }   // medidas mudaram e sobrepos: volta ao automatico
+  if (it) { const r = assemble(it.blocks, P, o); if (!hasOverlap(r)) return it.caixa ? naCaixa(r, it.caixa) : r; }   // medidas mudaram e sobrepos: volta ao automatico
   return build(prod, o, P);
 }
 
@@ -384,9 +389,9 @@ function explode(bl) {
     return g.cells.map((c, i) => ({ tipo: b.tipo, qtd: c.k, rot: b.rot, cols: 1, x: b.x + (i % b.cols) * g.cw, y: b.y + Math.floor(i / b.cols) * g.cd, layer: b.layer, id: `${b.tipo}#${b.layer}:${i}` }));
   });
 }
-function novaOrg(blocks, nome) {
+function novaOrg(blocks, nome, caixa) {
   const { prod, o } = cur(), sl = slotOf(prod, o);
-  sl.items.push({ nome: nome || `Organização ${sl.items.length + 1}`, blocks: plain(explode(plain(blocks))) });
+  sl.items.push({ nome: nome || `Organização ${sl.items.length + 1}`, blocks: plain(explode(plain(blocks))), ...(caixa ? { caixa } : {}) });
   sl.idx = sl.items.length - 1; saveLays();
   return sl.items[sl.idx].blocks;
 }
@@ -404,18 +409,31 @@ function caixaPara(w, l, h) {   // menor caixa padrao que comporta (sem exigir a
 }
 function sugerida(r) {
   // duas caixas, ditas com clareza: a medida exata desta organizacao e a caixa da linha padrao que ela usa
-  const a = Math.max(r.W, r.L), b = Math.min(r.W, r.L), ratio = a / b;
-  const forma = ratio < 1.08 ? 'quadrada' : `retangular, 1 : ${ratio.toFixed(1).replace('.', ',')}`;
+  const fmtR = (W, L) => { const a = Math.max(W, L) / Math.min(W, L); return a < 1.08 ? 'quadrada' : `retangular, 1 : ${a.toFixed(1).replace('.', ',')}`; };
+  const av = r.semAltura ? `<span class="warn">Com ${opts().altura} peças na altura não fecha bem (muito espaço vazio) — usei o melhor encaixe.</span>` : '';
+  if (r.caixa) {   // vendo dentro de uma caixa padrao
+    const c = r.caixa;
+    return av + `<span><b>Na caixa padrão ${c.id}:</b> ${c.W} × ${c.L} × ${c.H} mm — as peças cobrem ${Math.round(r.fill * 100)}% do fundo; o laranja-claro sem peça é o espaço que sobra.</span>` +
+      `<span class="acts"><button class="sec" data-auto>Voltar à medida exata</button></span>`;
+  }
   const W = up5(r.W), L = up5(r.L), H = up5(r.H);
-  const sob = `<span><b>Sob medida:</b> ${W} × ${L} × ${H} mm (${forma}) — as peças cobrem ${Math.round(r.fill * 100)}% do fundo.</span>`;
+  const sob = `<span><b>Sob medida:</b> ${W} × ${L} × ${H} mm (${fmtR(r.W, r.L)}) — as peças cobrem ${Math.round(r.fill * 100)}% do fundo.</span>`;
   const c = CAIXAS.length ? caixaPara(W, L, H) : null;
   const sobra = c ? Math.round((1 - r.W * r.L / (c.W * c.L)) * 100) : 0;
   const pad = !CAIXAS.length ? '<span class="mut">Procurando a caixa padrão…</span>'
-    : c ? `<span><b>Caixa padrão ${c.id}:</b> ${c.W} × ${c.L} × ${c.H} mm — ${sobra <= 5 ? 'praticamente a mesma medida.' : `sobra ${sobra}% de espaço no fundo, em troca de usar só ${CAIXAS.length} modelos de caixa para todo o cardápio.`}</span>`
+    : c ? `<span><b>Caixa padrão ${c.id}:</b> ${c.W} × ${c.L} × ${c.H} mm — ${sobra <= 5 ? 'praticamente a mesma medida.' : `sobra ${sobra}% de espaço no fundo, em troca de usar só ${CAIXAS.length} modelos de caixa para todo o cardápio.`}</span>` +
+        `<span class="acts"><button class="sec" data-ver="${c.id}">Ver na Caixa ${c.id}</button></span>`
     : `<span class="warn"><b>Nenhuma caixa padrão serve</b> — seria preciso um modelo novo de ${W} × ${L} × ${H} mm.</span>`;
-  const av = r.semAltura ? `<span class="warn">Com ${opts().altura} peças na altura não fecha bem (muito espaço vazio) — usei o melhor encaixe.</span>` : '';
   return av + sob + pad;
 }
+$('sug').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const { prod, o } = cur(), sl = slotOf(prod, o);
+  if ('auto' in b.dataset) { sl.idx = -1; saveLays(); sel.clear(); layerIdx = 0; render(); return; }
+  const c = CAIXAS.find(x => x.id === b.dataset.ver); if (!c) return;
+  const x = layoutNaCaixa(prod, o, c) || lastR;   // rearruma para caber; se nao der, usa a organizacao atual
+  sel.clear(); layerIdx = 0; novaOrg(x.blocks, `Na Caixa ${c.id}`, { id: c.id, W: c.W, L: c.L, H: c.H }); render();
+});
 
 function calcCaixas() {
   const o = opts(), minFill = (+$('minfill').value || 40) / 100;
@@ -472,7 +490,7 @@ function sugestoes() {
     ['Uma fileira por produto', () => linhasResult(prod, o, 'row')],
     ['Uma coluna por produto', () => linhasResult(prod, o, 'col')],
   ];
-  CAIXAS.filter(c => { const n = { pr: prod, oo: o, W: 0, L: 0, H: 0 }; return true; }).slice(0, 14).forEach(c => tarefas.push([`Na Caixa ${c.id} (${c.W}×${c.L})`, () => layoutNaCaixa(prod, o, c), c]));
+  CAIXAS.filter(c => { const n = { pr: prod, oo: o, W: 0, L: 0, H: 0 }; return true; }).slice(0, 14).forEach(c => tarefas.push([`Na Caixa ${c.id} (${c.W}×${c.L})`, () => { const x = layoutNaCaixa(prod, o, c); return x && naCaixa(x, c); }, c]));
   const vistos = new Set(); let i = 0;
   (function passo() {
     if (tok !== _sugTok) return;
@@ -480,8 +498,8 @@ function sugestoes() {
     const [nome, fn, cx] = tarefas[i++];
     let r = null; try { r = fn(); } catch (e) { r = null; }
     // nao sugerir caixa com muito espaco vazio nem proporcao extrema
-    if (r && (r.fill < .72 || Math.max(r.W, r.L) / Math.min(r.W, r.L) > 3.2)) r = null;
-    if (r && cx && (r.fill * r.W * r.L) / (cx.W * cx.L) < .55) r = null;   // produto pequeno demais para essa caixa
+    if (r && !cx && (r.fill < .72 || Math.max(r.W, r.L) / Math.min(r.W, r.L) > 3.2)) r = null;
+    if (r && cx && r.fill < .55) r = null;   // produto pequeno demais para essa caixa (fill ja e sobre a caixa inteira)   // produto pequeno demais para essa caixa
     if (r) {
       // o nome diz o que a caixa E, nao o que foi pedido: "Quadrada" que saiu retangular nao entra
       const ratio = Math.max(r.W, r.L) / Math.min(r.W, r.L);
@@ -505,7 +523,7 @@ function sugestoes() {
 $('sugs').addEventListener('click', e => {
   const b = e.target.closest('.sg'); if (!b) return;
   const s = SUG[+b.dataset.k]; if (!s) return;
-  sel.clear(); layerIdx = 0; novaOrg(s.r.blocks, s.nome); render();
+  sel.clear(); layerIdx = 0; novaOrg(s.r.blocks, s.nome, s.r.caixa); render();
 });
 
 // mockup da caixa em vetor: parede laranja de 10 mm por FORA da medida interna, fundo laranja claro
@@ -670,7 +688,7 @@ document.addEventListener('keydown', e => {
 
 // organizacoes
 $('lay').addEventListener('input', () => { const { prod, o } = cur(); slotOf(prod, o).idx = +$('lay').value; sel.clear(); saveLays(); render(); });
-$('btnNova').addEventListener('click', () => { novaOrg(lastR.blocks); sel.clear(); render(); });
+$('btnNova').addEventListener('click', () => { novaOrg(lastR.blocks, null, lastR.caixa); sel.clear(); render(); });
 $('btnSq').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 1.05, peso: 4, forma: 'q' }, P).blocks, 'Auto quadrada'); sel.clear(); layerIdx = 0; render(); });
 $('btnRe').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4, forma: 'r' }, P).blocks, 'Auto retangular'); sel.clear(); layerIdx = 0; render(); });
 $('btnRename').addEventListener('click', () => {
