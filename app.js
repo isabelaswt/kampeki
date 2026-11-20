@@ -333,7 +333,7 @@ const cabeCaixa = (n, c, minFill, o, P) =>
   (n.W <= c.W && n.L <= c.L || minL(n.pr, n.oo, P, c.W) <= c.L || minL(n.pr, n.oo, P, c.L) <= c.W);
 
 // caixas intermediarias aprovadas (20/11/2026): sempre fazem parte da linha
-const CAIXAS_FIXAS = [{ W: 205, L: 165, H: 50 }, { W: 280, L: 205, H: 50 }];
+const CAIXAS_FIXAS = [{ W: 205, L: 165, H: 50 }, { W: 280, L: 205, H: 50 }, { W: 220, L: 125, H: 50 }];
 const EXTRA_KEY = 'kampeki-caixas-extra';
 let EXTRAS = []; try { EXTRAS = JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch (e) { EXTRAS = []; }
 const saveExtras = () => { try { localStorage.setItem(EXTRA_KEY, JSON.stringify(EXTRAS)); } catch (e) { /* sem armazenamento */ } };
@@ -349,7 +349,8 @@ function escolherCaixas(prods, o, P, minFill) {
   let falta = new Set(need.map((_, i) => i));
   // caixas que voce adicionou a linha entram primeiro e ja levam os produtos que servem bem nelas
   const esc = [...CAIXAS_FIXAS, ...EXTRAS].map(c => ({ W: c.W, L: c.L, H: c.H }));
-  esc.forEach(c => [...falta].forEach(i => { if (cabeCaixa(need[i], c, minFill, o, P)) falta.delete(i); }));
+  // so levam o que fica BEM nelas (sobra ate 25%); o resto ganha a caixa que servir melhor
+  esc.forEach(c => [...falta].forEach(i => { if (cabeCaixa(need[i], c, Math.max(minFill, .75), o, P)) falta.delete(i); }));
   while (falta.size) {
     let best = null;
     for (const c of cand) {
