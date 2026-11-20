@@ -448,7 +448,7 @@ function layoutNaCaixa(prod, o, c) {   // rearranja o produto para caber DENTRO 
   return assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
 }
 function miniSVG(r, o, w = 168, h = 112) {
-  const s = Math.min((w - 8) / r.W, (h - 8) / r.L), ox = (w - r.W * s) / 2, oy = (h - r.L * s) / 2;
+  const s = Math.min((w - 8) / (r.W + 2 * PAREDE), (h - 8) / (r.L + 2 * PAREDE)), ox = (w - r.W * s) / 2, oy = (h - r.L * s) / 2;
   const cells = r.packs[0].placed.map((c, i) => {
     const p = P[c.tipo], fw = (c.rot ? c.od : c.ow) * s, fd = (c.rot ? c.ow : c.od) * s;
     const x = ox + (o.margin + c.x) * s, y = oy + (o.margin + c.y) * s;
@@ -456,7 +456,7 @@ function miniSVG(r, o, w = 168, h = 112) {
     const cx = x + fw / 2, cy = y + fd / 2;
     return `<g transform="rotate(90 ${cx} ${cy})">${shapeSVG(c, cx - c.ow * s / 2, cy - c.od * s / 2, p, s, 'm' + i)}</g>`;
   }).join('');
-  return `<svg viewBox="0 0 ${w} ${h}"><rect x="${ox}" y="${oy}" width="${r.W * s}" height="${r.L * s}" fill="none" stroke="#ff8b86" stroke-width="1.5" rx="2"/>${cells}</svg>`;
+  return `<svg viewBox="0 0 ${w} ${h}">${caixaSVG(ox, oy, r.W * s, r.L * s, s)}${cells}</svg>`;
 }
 function sugestoes() {
   const tok = ++_sugTok, { prod, o } = cur();
@@ -504,10 +504,19 @@ $('sugs').addEventListener('click', e => {
   sel.clear(); layerIdx = 0; novaOrg(s.r.blocks, s.nome); render();
 });
 
+// mockup da caixa em vetor: parede laranja de 10 mm por FORA da medida interna, fundo laranja claro
+const PAREDE = 10, CX = { parede: '#f0753f', aresta: '#d45f2c', fundo: '#f9c3a0', sombra: '#b8532a' };
+function caixaSVG(ox, oy, bw, bl, s) {
+  const B = PAREDE * s, r = Math.min(B * .45, 10);
+  return `<rect x="${ox - B}" y="${oy - B}" width="${bw + 2 * B}" height="${bl + 2 * B}" rx="${r}" fill="${CX.parede}" stroke="${CX.aresta}" stroke-width="1"/>` +
+    `<rect x="${ox - B * .45}" y="${oy - B * .45}" width="${bw + B * .9}" height="${bl + B * .9}" rx="${r * .6}" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="${Math.max(.6, B * .12)}"/>` +
+    `<rect x="${ox}" y="${oy}" width="${bw}" height="${bl}" rx="1.5" fill="${CX.fundo}"/>` +
+    `<rect x="${ox}" y="${oy}" width="${bw}" height="${bl}" rx="1.5" fill="none" stroke="${CX.sombra}" stroke-opacity=".35" stroke-width="${Math.max(.8, B * .22)}"/>`;
+}
 function stageSVG(r, o, opt = {}) {
   const li = Math.min(layerIdx, r.packs.length - 1), pack = r.packs[li];
-  const s = Math.min((VW - 2 * PAD) / r.W, (VH - 2 * PAD) / r.L), ox = (VW - r.W * s) / 2, oy = (VH - r.L * s) / 2;
-  const bw = r.W * s, bl = r.L * s;
+  const s = Math.min((VW - 2 * PAD) / (r.W + 2 * PAREDE), (VH - 2 * PAD) / (r.L + 2 * PAREDE)), ox = (VW - r.W * s) / 2, oy = (VH - r.L * s) / 2;
+  const bw = r.W * s, bl = r.L * s, B = PAREDE * s;
   const byB = {}, geo = {};
   pack.placed.forEach((c, i) => {
     const p = P[c.tipo], fw = (c.rot ? c.od : c.ow) * s, fd = (c.rot ? c.ow : c.od) * s;
@@ -530,10 +539,10 @@ function stageSVG(r, o, opt = {}) {
   }).join('');
   const dimTxt = (x, y, t, rot) => `<text x="${x}" y="${y}" font-size="13" text-anchor="middle" fill="currentColor" ${rot ? `transform="rotate(-90 ${x} ${y})"` : ''}>${t}</text>`;
   return `<svg viewBox="0 0 ${VW} ${VH}" width="${VW}" height="${VH}" role="img" style="touch-action:none">
-    <rect x="${ox}" y="${oy}" width="${bw}" height="${bl}" fill="none" stroke="#ff8b86" stroke-width="3" rx="3"/>
+    ${caixaSVG(ox, oy, bw, bl, s)}
     ${blocos}
-    <line x1="${ox}" y1="${oy - 14}" x2="${ox + bw}" y2="${oy - 14}" stroke="currentColor"/>${dimTxt(VW / 2, oy - 20, fmt(r.W) + ' mm')}
-    <line x1="${ox + bw + 14}" y1="${oy}" x2="${ox + bw + 14}" y2="${oy + bl}" stroke="currentColor"/>${dimTxt(ox + bw + 28, VH / 2, fmt(r.L) + ' mm', true)}
+    <line x1="${ox}" y1="${oy - B - 12}" x2="${ox + bw}" y2="${oy - B - 12}" stroke="currentColor"/>${dimTxt(VW / 2, oy - B - 18, fmt(r.W) + ' mm (interno)')}
+    <line x1="${ox + bw + B + 12}" y1="${oy}" x2="${ox + bw + B + 12}" y2="${oy + bl}" stroke="currentColor"/>${dimTxt(ox + bw + B + 26, VH / 2, fmt(r.L) + ' mm', true)}
   </svg>`;
 }
 
