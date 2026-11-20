@@ -332,6 +332,8 @@ const cabeCaixa = (n, c, minFill, o, P) =>
   n.H <= c.H && n.H / c.H >= minFill && (n.W * n.L) / (c.W * c.L) >= minFill &&
   (n.W <= c.W && n.L <= c.L || minL(n.pr, n.oo, P, c.W) <= c.L || minL(n.pr, n.oo, P, c.L) <= c.W);
 
+// caixas intermediarias aprovadas (20/11/2026): sempre fazem parte da linha
+const CAIXAS_FIXAS = [{ W: 205, L: 165, H: 50 }, { W: 280, L: 205, H: 50 }];
 const EXTRA_KEY = 'kampeki-caixas-extra';
 let EXTRAS = []; try { EXTRAS = JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch (e) { EXTRAS = []; }
 const saveExtras = () => { try { localStorage.setItem(EXTRA_KEY, JSON.stringify(EXTRAS)); } catch (e) { /* sem armazenamento */ } };
@@ -346,7 +348,7 @@ function escolherCaixas(prods, o, P, minFill) {
   const cand = [...new Map(need.map(n => [`${n.W}x${n.L}x${n.H}`, { W: n.W, L: n.L, H: n.H }])).values()];
   let falta = new Set(need.map((_, i) => i));
   // caixas que voce adicionou a linha entram primeiro e ja levam os produtos que servem bem nelas
-  const esc = EXTRAS.map(c => ({ W: c.W, L: c.L, H: c.H }));
+  const esc = [...CAIXAS_FIXAS, ...EXTRAS].map(c => ({ W: c.W, L: c.L, H: c.H }));
   esc.forEach(c => [...falta].forEach(i => { if (cabeCaixa(need[i], c, minFill, o, P)) falta.delete(i); }));
   while (falta.size) {
     let best = null;
@@ -457,7 +459,15 @@ function naCaixa(r, c) {
 }
 function result(prod, o) {
   const sl = slotOf(prod, o), it = sl.items[sl.idx];
-  if (it) { const r = assemble(it.blocks, P, o); if (!hasOverlap(r)) return it.caixa ? naCaixa(r, it.caixa) : r; }   // medidas mudaram e sobrepos: volta ao automatico
+  if (it) {
+    const r = assemble(it.blocks, P, o);
+    if (!hasOverlap(r)) {
+      if (!it.caixa) return r;
+      // a letra da caixa muda quando a linha muda: acha a caixa padrao de hoje pela medida
+      const c = it.caixa, hoje = CAIXAS.find(x => x.H === c.H && (x.W === c.W && x.L === c.L || x.W === c.L && x.L === c.W));
+      return naCaixa(r, { ...c, id: hoje ? hoje.id : '' });
+    }
+  }   // medidas mudaram e sobrepos: volta ao automatico
   return build(prod, o, P);
 }
 
@@ -564,7 +574,8 @@ function calcCaixas() {
     <span class="d">Atende ${p.m.length} combos que hoje sobram muito na caixa padrão:</span>
     <ul>${p.m.map(x => `<li>${x.pr.nome} — hoje na Caixa ${x.c ? x.c.id : '?'}, sobra ${Math.round(x.sobra * 100)}% → nesta, sobra ${Math.round((1 - x.area / (p.S.W * p.S.L)) * 100)}%</li>`).join('')}</ul>
     <button data-add="${k}">Adicionar à linha de caixas</button></div>`).join('');
-  if (lastR) $('sug').innerHTML = sugerida(lastR);
+  // com a linha pronta, refaz o topo (letra da caixa salva, caixa padrao mais proxima)
+  if (lastR) { const { prod, o: oo } = cur(); lastR = result(prod, oo); $('dim').innerHTML = dimHTML(lastR); $('sug').innerHTML = sugerida(lastR); }
   sugestoes();
 }
 
@@ -707,11 +718,12 @@ function stageSVG(r, o, opt = {}) {
   </svg>`;
 }
 
+const dimHTML = r => `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>${r.caixa ? (r.caixa.id ? `mm · Caixa padrão ${r.caixa.id} por dentro, com o combo dentro` : 'mm · caixa desta organização (por dentro)') : 'mm · medida exata das peças arrumadas (larg × comp × alt, por dentro)'}</small>`;
 function render() {
   const { o, prod } = cur(), sl = slotOf(prod, o);
   if (sl.idx >= sl.items.length) sl.idx = -1;
   const r = lastR = result(prod, o);
-  $('dim').innerHTML = `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>${r.caixa ? (r.caixa.id ? `mm · Caixa padrão ${r.caixa.id} por dentro, com o combo dentro` : 'mm · mesma caixa, outra arrumação (por dentro)') : 'mm · medida exata das peças arrumadas (larg × comp × alt, por dentro)'}</small>`;
+  $('dim').innerHTML = dimHTML(r);
   $('sug').innerHTML = sugerida(r);
   const tipos = Object.entries(prod.itens).map(([t, q]) => `<span>${avatar(t, P[t].cor)}${q} ${P[t].nome} · ${P[t].w}×${P[t].d}×${P[t].h}</span>`).join('');
   $('meta').innerHTML = tipos;
