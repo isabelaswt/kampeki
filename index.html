@@ -70,10 +70,20 @@ th{color:var(--mut);font-size:12px;border-bottom-color:var(--ink)}
 .eyebrow{margin:0 0 6px;color:var(--mut);font-size:13px}
 .dim{font-family:var(--serif);font-size:clamp(44px,6vw,76px);line-height:.95;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
 .dim small{display:block;margin-top:10px;font-family:var(--sans);font-size:13px;letter-spacing:0;color:var(--mut)}
-.facts{display:flex;flex-direction:column;gap:4px;margin:16px 0 0;font-size:13.5px;max-width:720px}
+.facts{display:flex;flex-direction:column;gap:4px;margin:18px 0 0;font-size:13.5px;max-width:760px}
 .facts>span{position:relative}
-.facts .acts{margin-top:6px}
-.facts .acts button{font-size:13px;padding:6px 14px;border-color:var(--salmon-ink);color:var(--salmon-ink)}
+/* caixa ideal -> caixa padrao mais proxima */
+.cx2{display:flex;align-items:stretch;gap:12px;flex-wrap:wrap;margin-top:6px}
+.cxc{flex:1 1 240px;display:flex;flex-direction:column;gap:2px;padding:14px 16px;border:1px solid var(--line);border-radius:14px;background:var(--box)}
+.cxc .k{font-size:12.5px;color:var(--mut)}
+.cxc .v{font-family:var(--serif);font-size:28px;line-height:1.1;font-variant-numeric:tabular-nums}
+.cxc .d{font-size:12.5px;color:var(--mut)}
+.cxc.pad{border-color:var(--salmon)}
+.cxc.on{background:color-mix(in srgb,var(--salmon) 14%,var(--box))}
+.cxc button{align-self:flex-start;margin-top:10px;font-size:13px;padding:6px 14px;border-color:var(--salmon-ink);color:var(--salmon-ink)}
+.cx2 .seta{align-self:center;font-size:20px;color:var(--mut)}
+.why{margin:10px 0 0;font-size:12.5px;color:var(--mut);max-width:720px}
+.why b{color:var(--ink)}
 .legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin:14px 0 0;font-size:12.5px;color:var(--mut)}
 .legend>span{white-space:nowrap}
 .frame{position:relative;margin-top:22px;width:100%;height:clamp(360px,58vh,660px);display:flex;align-items:center;justify-content:center;background:var(--stage);border-radius:var(--r);overflow:hidden}
@@ -202,7 +212,7 @@ details>div{padding:6px 0 4px 20px;font-size:13px}
     <div id="sugs" class="sugs"></div>
   </aside>
 </main>
-<script src="data.js?v=20261120k"></script>
-<script src="app.js?v=20261120k"></script>
+<script src="data.js?v=20261120o"></script>
+<script src="app.js?v=20261120o"></script>
 </body>
 </html>

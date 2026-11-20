@@ -371,7 +371,7 @@ const hasOverlap = r => { const ids = Object.keys(r.ge); return ids.some((i, ix)
 // mostra a organizacao DENTRO de uma caixa padrao: a caixa no tamanho real, com o fundo que sobra a vista
 function naCaixa(r, c) {
   const W = Math.max(r.W, c.W), L = Math.max(r.L, c.L);
-  return { ...r, W, L, H: Math.max(r.H, c.H), fill: r.fill * r.W * r.L / (W * L), caixa: { id: c.id, W: c.W, L: c.L, H: c.H } };
+  return { ...r, W, L, H: Math.max(r.H, c.H), fill: r.fill * r.W * r.L / (W * L), caixa: { id: c.id, W: c.W, L: c.L, H: c.H }, justo: { W: r.W, L: r.L, H: r.H, fill: r.fill } };
 }
 function result(prod, o) {
   const sl = slotOf(prod, o), it = sl.items[sl.idx];
@@ -404,27 +404,35 @@ function normalize(bl) {
   bl.forEach(b => { b.x -= mx; b.y -= my; });
 }
 let CAIXAS = [];   // caixas padrao calculadas para todos os produtos
+// caixa padrao MAIS PROXIMA do combo: a menor da linha em que ele cabe (reorganizando as pecas se precisar)
+function caixaProxima(prod, o, j) {
+  const H = up5(j.H);
+  const cabe = c => H <= c.H && (up5(j.W) <= c.W && up5(j.L) <= c.L || minL(prod, o, P, c.W) <= c.L || minL(prod, o, P, c.L) <= c.W);
+  return CAIXAS.filter(cabe).sort((x, y) => x.W * x.L * x.H - y.W * y.L * y.H)[0] || null;
+}
 function caixaPara(w, l, h) {   // menor caixa padrao que comporta (sem exigir aproveitamento minimo)
   return CAIXAS.filter(c => w <= c.W && l <= c.L && h <= c.H).sort((x, y) => x.W * x.L * x.H - y.W * y.L * y.H)[0] || null;
 }
 function sugerida(r) {
-  // duas caixas, ditas com clareza: a medida exata desta organizacao e a caixa da linha padrao que ela usa
-  const fmtR = (W, L) => { const a = Math.max(W, L) / Math.min(W, L); return a < 1.08 ? 'quadrada' : `retangular, 1 : ${a.toFixed(1).replace('.', ',')}`; };
+  // 1) caixa ideal (sob medida) deste combo  2) caixa padrao mais proxima em que ele cabe  3) por que padronizar
+  const { prod, o } = cur(), j = r.caixa ? build(prod, o, P) : r;   // vendo na caixa padrao: a ideal continua sendo a arrumacao automatica
+  const forma = (W, L) => { const a = Math.max(W, L) / Math.min(W, L); return a < 1.08 ? 'quadrada' : `retangular, 1 : ${a.toFixed(1).replace('.', ',')}`; };
   const av = r.semAltura ? `<span class="warn">Com ${opts().altura} peças na altura não fecha bem (muito espaço vazio) — usei o melhor encaixe.</span>` : '';
-  if (r.caixa) {   // vendo dentro de uma caixa padrao
-    const c = r.caixa;
-    return av + `<span><b>Na caixa padrão ${c.id}:</b> ${c.W} × ${c.L} × ${c.H} mm — as peças cobrem ${Math.round(r.fill * 100)}% do fundo; o laranja-claro sem peça é o espaço que sobra.</span>` +
-      `<span class="acts"><button class="sec" data-auto>Voltar à medida exata</button></span>`;
-  }
-  const W = up5(r.W), L = up5(r.L), H = up5(r.H);
-  const sob = `<span><b>Sob medida:</b> ${W} × ${L} × ${H} mm (${fmtR(r.W, r.L)}) — as peças cobrem ${Math.round(r.fill * 100)}% do fundo.</span>`;
-  const c = CAIXAS.length ? caixaPara(W, L, H) : null;
-  const sobra = c ? Math.round((1 - r.W * r.L / (c.W * c.L)) * 100) : 0;
-  const pad = !CAIXAS.length ? '<span class="mut">Procurando a caixa padrão…</span>'
-    : c ? `<span><b>Caixa padrão ${c.id}:</b> ${c.W} × ${c.L} × ${c.H} mm — ${sobra <= 5 ? 'praticamente a mesma medida.' : `sobra ${sobra}% de espaço no fundo, em troca de usar só ${CAIXAS.length} modelos de caixa para todo o cardápio.`}</span>` +
-        `<span class="acts"><button class="sec" data-ver="${c.id}">Ver na Caixa ${c.id}</button></span>`
-    : `<span class="warn"><b>Nenhuma caixa padrão serve</b> — seria preciso um modelo novo de ${W} × ${L} × ${H} mm.</span>`;
-  return av + sob + pad;
+  const W = up5(j.W), L = up5(j.L), H = up5(j.H);
+  const ideal = `<div class="cxc"><span class="k">Caixa ideal (sob medida)</span><span class="v">${W} × ${L} × ${H}</span><span class="d">a medida exata arredondada de 5 em 5 mm · ${forma(j.W, j.L)} · as peças ocupam ${Math.round(j.fill * 100)}% do fundo</span></div>`;
+  if (!CAIXAS.length) return av + `<div class="cx2">${ideal}<div class="cxc pad"><span class="k">Caixa padrão mais próxima</span><span class="d">calculando a linha de caixas…</span></div></div>`;
+  const c = caixaProxima(prod, o, j);
+  if (!c) return av + `<div class="cx2">${ideal}<div class="cxc pad warn"><span class="k">Nenhuma caixa padrão serve</span><span class="d">seria preciso um modelo novo de ${W} × ${L} × ${H} mm</span></div></div>`;
+  const direto = W <= c.W && L <= c.L, dW = c.W - W, dL = c.L - L, dH = c.H - H;
+  const mais = direto ? [dW && `+${dW} mm na largura`, dL && `+${dL} mm no comprimento`, dH && `+${dH} mm na altura`].filter(Boolean).join(', ') || 'mesma medida'
+    : 'cabe com as peças reorganizadas';
+  const sobra = Math.round((1 - j.fill * j.W * j.L / (c.W * c.L)) * 100);
+  const vendo = r.caixa && r.caixa.id === c.id;
+  const btn = vendo ? `<button data-auto>Voltar à caixa ideal</button>` : `<button data-ver="${c.id}">Ver o combo na Caixa ${c.id}</button>`;
+  const padrao = `<div class="cxc pad${vendo ? ' on' : ''}"><span class="k">Caixa padrão mais próxima</span><span class="v">${c.id} · ${c.W} × ${c.L} × ${c.H}</span><span class="d">${mais} · sobra ${sobra}% do fundo</span>${btn}</div>`;
+  const outros = c.produtos.filter(n => n !== prod.nome);
+  const why = `<p class="why">Para não fazer uma caixa para cada produto, o cardápio inteiro (${PRODUTOS.length} produtos) foi agrupado em <b>${CAIXAS.length} caixas padrão</b>. ${outros.length ? `A Caixa ${c.id} também atende: ${outros.slice(0, 5).join(', ')}${outros.length > 5 ? ` e mais ${outros.length - 5}` : ''}.` : ''}</p>`;
+  return av + `<div class="cx2">${ideal}<span class="seta">→</span>${padrao}</div>` + why;
 }
 $('sug').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -572,7 +580,7 @@ function render() {
   const { o, prod } = cur(), sl = slotOf(prod, o);
   if (sl.idx >= sl.items.length) sl.idx = -1;
   const r = lastR = result(prod, o);
-  $('dim').innerHTML = `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>mm (larg × comp × alt, interno)</small>`;
+  $('dim').innerHTML = `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>${r.caixa ? `mm · Caixa padrão ${r.caixa.id} por dentro, com o combo dentro` : 'mm · medida exata das peças arrumadas (larg × comp × alt, por dentro)'}</small>`;
   $('sug').innerHTML = sugerida(r);
   const tipos = Object.entries(prod.itens).map(([t, q]) => `<span>${avatar(t, P[t].cor)}${q} ${P[t].nome} · ${P[t].w}×${P[t].d}×${P[t].h}</span>`).join('');
   $('meta').innerHTML = tipos;
