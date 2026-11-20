@@ -628,7 +628,7 @@ function layoutNaCaixa(prod, o, c) {   // rearranja o produto para caber DENTRO 
   r.caixaVista = vista; return r;
 }
 function miniSVG(r, o, w = 168, h = 112) {
-  const s = Math.min((w - 8) / (r.W + 2 * PAREDE), (h - 8) / (r.L + 2 * PAREDE)), ox = (w - r.W * s) / 2, oy = (h - r.L * s) / 2;
+  const s = Math.min((w - 8) / (r.W + 2 * PAREDE()), (h - 8) / (r.L + 2 * PAREDE())), ox = (w - r.W * s) / 2, oy = (h - r.L * s) / 2;
   const cells = r.packs[0].placed.map((c, i) => {
     const p = P[c.tipo], fw = (c.rot ? c.od : c.ow) * s, fd = (c.rot ? c.ow : c.od) * s;
     const x = ox + (o.margin + c.x) * s, y = oy + (o.margin + c.y) * s;
@@ -711,19 +711,24 @@ $('sugs').addEventListener('click', e => {
   sel.clear(); layerIdx = 0; novaOrg(s.r.blocks, nome, s.r.caixa); render();
 });
 
-// mockup da caixa em vetor: parede laranja de 10 mm por FORA da medida interna, fundo laranja claro
-const PAREDE = 10, CX = { parede: '#f0753f', aresta: '#d45f2c', fundo: '#f9c3a0', sombra: '#b8532a' };
+// mockup da caixa em vetor, como a caixa real vista de cima: parede por FORA da medida interna, em moldura
+// com cantos a 45 graus, cada lado num tom (luz de cima), e fundo laranja claro. Espessura no campo 'Borda'.
+const PAREDE = () => Math.max(0, Math.min(40, +($('borda') && $('borda').value) || 0));
+const CX = { cima: '#f58c5b', esq: '#ee7746', dir: '#e3683a', baixo: '#d4592e', aresta: '#b54b23', fundo: '#f9c3a0' };
 function caixaSVG(ox, oy, bw, bl, s) {
-  const B = PAREDE * s, r = Math.min(B * .45, 10);
-  return `<rect x="${ox - B}" y="${oy - B}" width="${bw + 2 * B}" height="${bl + 2 * B}" rx="${r}" fill="${CX.parede}" stroke="${CX.aresta}" stroke-width="1"/>` +
-    `<rect x="${ox - B * .45}" y="${oy - B * .45}" width="${bw + B * .9}" height="${bl + B * .9}" rx="${r * .6}" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="${Math.max(.6, B * .12)}"/>` +
-    `<rect x="${ox}" y="${oy}" width="${bw}" height="${bl}" rx="1.5" fill="${CX.fundo}"/>` +
-    `<rect x="${ox}" y="${oy}" width="${bw}" height="${bl}" rx="1.5" fill="none" stroke="${CX.sombra}" stroke-opacity=".35" stroke-width="${Math.max(.8, B * .22)}"/>`;
+  const B = PAREDE() * s, X0 = ox - B, Y0 = oy - B, X1 = ox + bw + B, Y1 = oy + bl + B, x1 = ox + bw, y1 = oy + bl;
+  const pol = (pts, cor) => `<polygon points="${pts.map(p => p.join(',')).join(' ')}" fill="${cor}"/>`;
+  const sombra = Math.max(.6, Math.min(B, 4 * s) * .5);   // sombra da parede no fundo, dos lados de cima e da esquerda
+  return (B > 0 ? pol([[X0, Y0], [X1, Y0], [x1, oy], [ox, oy]], CX.cima) + pol([[X0, Y0], [ox, oy], [ox, y1], [X0, Y1]], CX.esq) +
+      pol([[X1, Y0], [X1, Y1], [x1, y1], [x1, oy]], CX.dir) + pol([[X0, Y1], [ox, y1], [x1, y1], [X1, Y1]], CX.baixo) +
+      `<rect x="${X0}" y="${Y0}" width="${X1 - X0}" height="${Y1 - Y0}" fill="none" stroke="${CX.aresta}" stroke-width="1"/>` : '') +
+    `<rect x="${ox}" y="${oy}" width="${bw}" height="${bl}" fill="${CX.fundo}" stroke="${CX.aresta}" stroke-width="${B > 0 ? .8 : 1.5}"/>` +
+    `<rect x="${ox}" y="${oy}" width="${bw}" height="${sombra}" fill="#000" opacity=".12"/><rect x="${ox}" y="${oy}" width="${sombra}" height="${bl}" fill="#000" opacity=".08"/>`;
 }
 function stageSVG(r, o, opt = {}) {
   const li = Math.min(layerIdx, r.packs.length - 1), pack = r.packs[li];
-  const s = Math.min((VW - 2 * PAD) / (r.W + 2 * PAREDE), (VH - 2 * PAD) / (r.L + 2 * PAREDE)), ox = (VW - r.W * s) / 2, oy = (VH - r.L * s) / 2;
-  const bw = r.W * s, bl = r.L * s, B = PAREDE * s;
+  const s = Math.min((VW - 2 * PAD) / (r.W + 2 * PAREDE()), (VH - 2 * PAD) / (r.L + 2 * PAREDE())), ox = (VW - r.W * s) / 2, oy = (VH - r.L * s) / 2;
+  const bw = r.W * s, bl = r.L * s, B = PAREDE() * s;
   const byB = {}, geo = {};
   pack.placed.forEach((c, i) => {
     const p = P[c.tipo], fw = (c.rot ? c.od : c.ow) * s, fd = (c.rot ? c.ow : c.od) * s;
@@ -753,7 +758,7 @@ function stageSVG(r, o, opt = {}) {
   </svg>`;
 }
 
-const dimHTML = r => `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>${r.caixa ? (r.caixa.id ? `mm · Caixa padrão ${r.caixa.id} por dentro, com o combo dentro` : 'mm · caixa desta organização (por dentro)') : 'mm · medida exata das peças arrumadas (larg × comp × alt, por dentro)'}</small>`;
+const dimHTML = r => `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>${r.caixa ? (r.caixa.id ? `mm · Caixa padrão ${r.caixa.id} por dentro, com o combo dentro` : 'mm · caixa desta organização (por dentro)') : 'mm · medida exata das peças arrumadas (larg × comp × alt, por dentro)'}${PAREDE() ? ` · por fora ${fmt(r.W + 2 * PAREDE())} × ${fmt(r.L + 2 * PAREDE())} mm (borda de ${PAREDE()} mm)` : ''}</small>`;
 function render() {
   const { o, prod } = cur(), sl = slotOf(prod, o);
   if (sl.idx >= sl.items.length) sl.idx = -1;
@@ -893,6 +898,7 @@ $('tbl').innerHTML = '<tr><th>Peça</th><th>Larg</th><th>Prof</th><th>Alt</th></
   ['w', 'd', 'h'].map(f => `<td><input type="number" data-k="${k}" data-f="${f}" value="${p[f]}" min="5"></td>`).join('') + '</tr>').join('');
 $('tbl').addEventListener('input', e => { const t = e.target; if (t.dataset.k) { P[t.dataset.k][t.dataset.f] = +t.value || 5; render(); sugestoes(); } });
 $('minfill').addEventListener('input', () => { if (CAIXAS.length) calcCaixas(); });
+$('borda').addEventListener('input', () => { render(); desenharSugs(opts()); });   // so o desenho muda (a medida interna e a mesma)
 $('caixas').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.add != null) { const p = PROPS[+b.dataset.add]; if (p) EXTRAS.push(p.S); }
