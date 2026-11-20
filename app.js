@@ -403,14 +403,18 @@ function caixaPara(w, l, h) {   // menor caixa padrao que comporta (sem exigir a
   return CAIXAS.filter(c => w <= c.W && l <= c.L && h <= c.H).sort((x, y) => x.W * x.L * x.H - y.W * y.L * y.H)[0] || null;
 }
 function sugerida(r) {
+  // duas caixas, ditas com clareza: a medida exata desta organizacao e a caixa da linha padrao que ela usa
   const a = Math.max(r.W, r.L), b = Math.min(r.W, r.L), ratio = a / b;
-  const forma = ratio < 1.08 ? 'quadrada' : `retangular (1 : ${ratio.toFixed(2).replace('.', ',')})`;
-  const c = CAIXAS.length ? caixaPara(up5(r.W), up5(r.L), up5(r.H)) : null;
-  const pad = !CAIXAS.length ? '<span class="mut">calculando caixas padrão…</span>'
-    : c ? `<span><b>Usa a Caixa ${c.id}</b> (${c.W} × ${c.L} × ${c.H} mm) · folga de ${Math.round((1 - r.W * r.L / (c.W * c.L)) * 100)}% na planta</span>`
-    : `<span class="warn"><b>Não cabe em nenhuma caixa padrão</b> — pediria uma nova de ${up5(r.W)} × ${up5(r.L)} × ${up5(r.H)} mm</span>`;
+  const forma = ratio < 1.08 ? 'quadrada' : `retangular, 1 : ${ratio.toFixed(1).replace('.', ',')}`;
+  const W = up5(r.W), L = up5(r.L), H = up5(r.H);
+  const sob = `<span><b>Sob medida:</b> ${W} × ${L} × ${H} mm (${forma}) — as peças cobrem ${Math.round(r.fill * 100)}% do fundo.</span>`;
+  const c = CAIXAS.length ? caixaPara(W, L, H) : null;
+  const sobra = c ? Math.round((1 - r.W * r.L / (c.W * c.L)) * 100) : 0;
+  const pad = !CAIXAS.length ? '<span class="mut">Procurando a caixa padrão…</span>'
+    : c ? `<span><b>Caixa padrão ${c.id}:</b> ${c.W} × ${c.L} × ${c.H} mm — ${sobra <= 5 ? 'praticamente a mesma medida.' : `sobra ${sobra}% de espaço no fundo, em troca de usar só ${CAIXAS.length} modelos de caixa para todo o cardápio.`}</span>`
+    : `<span class="warn"><b>Nenhuma caixa padrão serve</b> — seria preciso um modelo novo de ${W} × ${L} × ${H} mm.</span>`;
   const av = r.semAltura ? `<span class="warn">Com ${opts().altura} peças na altura não fecha bem (muito espaço vazio) — usei o melhor encaixe.</span>` : '';
-  return av + `<span><b>Caixa sugerida:</b> ${up5(r.W)} × ${up5(r.L)} × ${up5(r.H)} mm · ${forma}</span><span>ocupação ${Math.round(r.fill * 100)}%</span>${pad}`;
+  return av + sob + pad;
 }
 
 function calcCaixas() {

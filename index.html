@@ -37,10 +37,12 @@ b{font-weight:500}
 #sel{min-width:260px;font-weight:500}
 .pick select:hover{border-color:var(--ink)}
 
-main{display:grid;grid-template-columns:300px minmax(0,1fr);gap:48px;padding:32px}
-
-/* lateral: ajustes e medidas, sem cartoes */
-aside{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 110px);overflow:auto;padding-right:4px}
+/* telas largas: ajustes | caixa | outras organizacoes, tudo a vista */
+main{display:grid;grid-template-columns:280px minmax(0,1fr) 216px;grid-template-areas:"aj stage rail";gap:40px;padding:32px}
+.aj{grid-area:aj}.stage{grid-area:stage}.rail{grid-area:rail}
+main>*{min-width:0}
+.aj,.rail{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 110px);overflow:auto;scrollbar-width:thin}
+.aj{padding-right:4px}
 .group{padding:0 0 22px;margin:0 0 22px;border-bottom:1px solid var(--line)}
 .group:last-child{border-bottom:0}
 .title{font-family:var(--serif);font-size:24px;line-height:1.1;margin:0 0 14px;font-weight:400}
@@ -68,7 +70,7 @@ th{color:var(--mut);font-size:12px;border-bottom-color:var(--ink)}
 .eyebrow{margin:0 0 6px;color:var(--mut);font-size:13px}
 .dim{font-family:var(--serif);font-size:clamp(44px,6vw,76px);line-height:.95;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
 .dim small{display:block;margin-top:10px;font-family:var(--sans);font-size:13px;letter-spacing:0;color:var(--mut)}
-.facts{display:flex;flex-wrap:wrap;gap:6px 22px;margin:16px 0 0;font-size:13.5px}
+.facts{display:flex;flex-direction:column;gap:4px;margin:16px 0 0;font-size:13.5px;max-width:720px}
 .facts>span{position:relative}
 .legend{display:flex;flex-wrap:wrap;gap:8px 20px;margin:14px 0 0;font-size:12.5px;color:var(--mut)}
 .legend>span{white-space:nowrap}
@@ -91,14 +93,14 @@ button:disabled{opacity:.35;cursor:default}
 .tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 #hint{flex-basis:100%;font-size:12.5px;margin-top:2px}
 
-/* sugestoes: miniaturas */
-.alt{margin-top:34px}
-.alt-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
-.sugs{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin}
-.sg{flex:0 0 190px;background:var(--stage);border:1px solid transparent;border-radius:14px;padding:10px 10px 12px;text-align:left;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+/* outras organizacoes: coluna ao lado da caixa */
+.rail .title{margin-bottom:4px}
+.rail .note{margin:0 0 14px}
+.sugs{display:flex;flex-direction:column;gap:10px}
+.sg{width:100%;background:var(--stage);border:1px solid transparent;border-radius:14px;padding:8px 10px 10px;text-align:left;display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.35}
 .sg:hover{border-color:var(--salmon)}
 .sg svg{width:100%;height:auto;display:block;margin-bottom:6px}
-.sg b{font-size:13.5px}
+.sg b{font-size:13px}
 
 /* rodape de dados */
 .data{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
@@ -111,12 +113,21 @@ details[open] summary::before{content:'–'}
 details>div{padding:6px 0 4px 20px;font-size:13px}
 #all td{font-size:13px}
 
+/* notebook: caixa | outras organizacoes; ajustes e medidas descem para baixo da caixa */
+@media (max-width:1360px){
+  main{grid-template-columns:minmax(0,1fr) 216px;grid-template-areas:"stage rail" "aj aj"}
+  .aj{position:static;max-height:none;overflow:visible;display:grid;grid-template-columns:1fr 1.4fr;gap:40px;padding-top:28px;border-top:1px solid var(--line)}
+  .aj .group{border-bottom:0;margin:0}
+}
 @media (max-width:960px){
   .top{flex-wrap:wrap;gap:12px 20px;padding:14px 16px;position:static}
   .pick{margin-left:0;width:100%}
   #sel{min-width:0;flex:1}
-  main{grid-template-columns:1fr;padding:20px 16px;gap:28px}
-  aside{position:static;max-height:none;order:2}
+  main{grid-template-columns:minmax(0,1fr);grid-template-areas:"stage" "rail" "aj";padding:20px 16px;gap:28px}
+  .rail{position:static;max-height:none;overflow:visible}
+  .sugs{flex-direction:row;overflow-x:auto;padding-bottom:8px}
+  .sg{flex:0 0 180px}
+  .aj{grid-template-columns:1fr}
   .data{grid-template-columns:1fr}
   .frame{height:auto;aspect-ratio:640/440}
 }
@@ -132,7 +143,7 @@ details>div{padding:6px 0 4px 20px;font-size:13px}
   </div>
 </header>
 <main>
-  <aside>
+  <aside class="aj">
     <section class="group">
       <h2 class="title">Ajustes da caixa</h2>
       <label>Folga entre peças <input id="gap" type="number" value="0" min="-10"></label>
@@ -170,11 +181,6 @@ details>div{padding:6px 0 4px 20px;font-size:13px}
       <span id="hint" class="mut"></span>
     </div>
 
-    <div class="alt">
-      <div class="alt-head"><h2 class="title" style="margin:0">Outras organizações</h2><span class="mut" style="font-size:12.5px">clique para usar</span></div>
-      <div id="sugs" class="sugs"></div>
-    </div>
-
     <div class="data">
       <section>
         <h2 class="title">Caixas padrão</h2>
@@ -187,8 +193,14 @@ details>div{padding:6px 0 4px 20px;font-size:13px}
       </section>
     </div>
   </section>
+
+  <aside class="rail">
+    <h2 class="title">Outras organizações</h2>
+    <p class="note">Clique para usar — depois dá para girar e ajustar.</p>
+    <div id="sugs" class="sugs"></div>
+  </aside>
 </main>
-<script src="data.js?v=20261120g"></script>
-<script src="app.js?v=20261120g"></script>
+<script src="data.js?v=20261120j"></script>
+<script src="app.js?v=20261120j"></script>
 </body>
 </html>
