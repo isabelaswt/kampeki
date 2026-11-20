@@ -345,6 +345,11 @@ function shapeSVG(c, x, y, p, s, id) {
   else if (f === 'tri') { const pts = `${cx},${y} ${x + w},${y + d} ${x},${y + d}`; geo = `<polygon points="${pts}"`; clip = `<polygon points="${pts}"/>`; }
   else { const rr = Math.min(w, d) * .25; geo = `<rect x="${x}" y="${y}" width="${w}" height="${d}" rx="${rr}"`; clip = `<rect x="${x}" y="${y}" width="${w}" height="${d}" rx="${rr}"/>`; }
   if (PHOTO[c.tipo]) return photo(c.tipo, x, y, w, d);
+  if (PHOTO[c.tipo + '_tile']) return photo(c.tipo + '_tile', x, y, w, d);   // peca solta usa a foto de uma peca (ex.: hossomaki)
+  if (c.tipo === 'sashimi_rolinho') {   // sem foto ainda: rosa de salmao desenhada (aneis com veios)
+    const r = Math.min(w, d) / 2;
+    return [1, .74, .5, .27].map((k, i) => `<circle cx="${cx}" cy="${cy}" r="${r * k}" fill="${['#f08a6a', '#f39a7c', '#f08a6a', '#e9785a'][i]}" stroke="#fff6" stroke-width="${Math.max(.6, r * .07)}"/>`).join('');
+  }
   return `${geo} fill="${p.cor}" stroke="#0004"/>`;
 }
 

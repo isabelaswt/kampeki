@@ -13,7 +13,8 @@
     ['filadelfia', 'Uramaki filadélfia', '#f0a58a'], ['palha', 'Uramaki palha doce', '#e0a84a'], ['shake_ebi', 'Uramaki shake ebi', '#e8815a'],
     ['poro', 'Uramaki alho-poró', '#c9b26a'], ['skin', 'Uramaki shake skin', '#b07a4a'], ['ebi', 'Uramaki ebi', '#e3946a'],
     ['brocolis', 'Uramaki brócolis', '#7fa06a'], ['shimeji', 'Uramaki shimeji', '#8a6a4f'], ['ebi_tuna', 'Uramaki ebi tuna', '#a8323e']]);
-  const HOSSO = V('hosso', { w: 30, d: 30, h: 28, perCell: 8, step: 16 }, [
+  // hossomaki: cada peca solta, em pe, uma ao lado da outra (sem sobrepor) - permite montar em quadrado (2 x 2)
+  const HOSSO = V('hosso', { w: 30, d: 30, h: 28, perCell: 1 }, [
     ['filadelfia', 'Hossomaki filadélfia', '#8fb58a'], ['salmao', 'Hossomaki salmão', '#7fa58a'],
     ['ebi', 'Hossomaki ebi', '#9fb08a'], ['kappa', 'Hossomaki kappa (pepino)', '#6f9a7a']]);
   const HOT = V('hot', { w: 40, d: 39, h: 32, perCell: 1 }, [
@@ -37,6 +38,7 @@
     futo:     { nome: 'Futomaki shake tuna', w: 44, d: 44, h: 40, perCell: 1, cor: '#9aa6c9' },
     shake:    { nome: 'Shake (sem arroz)',   w: 34, d: 40, h: 30, perCell: 1, cor: '#e58f7a' },
     sashimi:  { nome: 'Sashimi (lâmina)',    w: 17, d: 53, h: 16, perCell: 12, step: 8, cor: '#f2b8a2' }, // 6 ou 12 lâminas: 1 fileira
+    sashimi_rolinho: { nome: 'Sashimi em rolinho (rosa)', w: 36, d: 36, h: 30, perCell: 1, cor: '#f08a6a' }, // quando vem 4 lâminas: cada uma enrolada
     porcao:   { nome: 'Porção (copo)',       w: 70, d: 70, h: 40, perCell: 1, cor: '#b7c7d6' },
     crispy:   { nome: 'Crispy / chips (separado)', w: 60, d: 58, h: 25, perCell: 1, cor: '#e0a85a' },
     oniguiri: { nome: 'Oniguiri',            w: 90, d: 82, h: 36, perCell: 1, cor: '#cfcfcf' },
@@ -63,6 +65,10 @@
     { nome: 'Combo Tradicional (48)', itens: { sashimi: 12, uramaki_filadelfia: 10, uramaki_ebi: 10, hosso_salmao: 8, nigiri_salmao: 4, gunkan_salmao: 4 } },
     { nome: 'Combo Salmão (52)', itens: { sashimi: 12, hosso_filadelfia: 8, uramaki_filadelfia: 10, uramaki_palha: 10, nigiri_salmao: 6 /* ~niguiri filadélfia */, gunkan_filadelfia: 6 } },
   ];
+
+  // regra da casa: com 4 sashimis, cada lamina vai enrolada (rosa), nao em fileira
+  const rolinho = c => { if (c.itens.sashimi === 4) { const { sashimi, ...resto } = c.itens; c.itens = { sashimi_rolinho: 4, ...resto }; } return c; };
+  window.COMBOS.forEach(rolinho);
 
   // Pecas avulsas do cardapio
   const av = (nome, itens) => ({ nome, itens });
