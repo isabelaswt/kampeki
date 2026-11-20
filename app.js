@@ -65,10 +65,10 @@ function familyOptions(gs, P, o, W, k) {
 const ORDENS = [(x, y) => y.h - x.h || y.w - x.w, (x, y) => y.w - x.w || y.h - x.h, (x, y) => y.w * y.h - x.w * x.h];
 // familia fisica de uma peca: produtos parecidos (mesmo formato, sabor diferente) ficam sempre juntos
 const familia = t => String(t).split('_')[0];
-function placeBlocks(blocks, W, ord = 0) {
+function placeBlocks(blocks, W, ord = 0, ordemF) {   // ordemF: ordem das familias (senao, da maior para a menor)
   const rects = [], out = []; let L = 0;
   const areaF = {}; blocks.forEach(b => { const f = familia(b.g.tipo); areaF[f] = (areaF[f] || 0) + b.w * b.h; });
-  const rank = Object.keys(areaF).sort((x, y) => areaF[y] - areaF[x]);
+  const rank = ordemF || Object.keys(areaF).sort((x, y) => areaF[y] - areaF[x]);
   const ordem = [...blocks].sort((x, y) => rank.indexOf(familia(x.g.tipo)) - rank.indexOf(familia(y.g.tipo)) || ORDENS[ord](x, y));
   for (const b of ordem) {
     let bx = -1, by = Infinity;
@@ -92,7 +92,48 @@ function placeBlocks(blocks, W, ord = 0) {
     const x0 = Math.min(...mine.map(r => r.x)), y0 = Math.min(...mine.map(r => r.y)), x1 = Math.max(...mine.map(r => r.x + r.w)), y1 = Math.max(...mine.map(r => r.y + r.h));
     for (const r of rects) if (r.f !== f) intr += Math.max(0, Math.min(x1, r.x + r.w) - Math.max(x0, r.x)) * Math.max(0, Math.min(y1, r.y + r.h) - Math.max(y0, r.y));
   }
-  return { blocks: out, L, area: tot, reg: 1 + .08 * (uy - 1) + .03 * (ux - 1) + 2 * intr / Math.max(1, tot) };
+  return { blocks: out, rects, L, area: tot, reg: 1 + .08 * (uy - 1) + .03 * (ux - 1) + 2 * intr / Math.max(1, tot) };
+}
+
+// ---- outras organizacoes DENTRO DA MESMA CAIXA: muda a ordem das familias e o formato de cada bloco,
+// guarda as que cabem na caixa atual e sao diferentes entre si (onde cada familia fica)
+const permutacoes = a => a.length <= 1 ? [a] : a.flatMap((x, i) => permutacoes([...a.slice(0, i), ...a.slice(i + 1)]).map(q => [x, ...q]));
+function variacoesNaMesmaCaixa(prod, o, base, max = 6) {
+  if (!base || base.packs.length !== 1) return [];
+  const m = 2 * o.margin - o.gap, Wp = base.W - m, Lp = base.L - m;
+  const groups = Object.entries(prod.itens).map(([tipo, qtd]) => ({ tipo, qtd }));
+  const fams = Object.values(groups.reduce((acc, g) => ((acc[familia(g.tipo)] ||= []).push(g), acc), {}));
+  if (fams.length < 2) return [];
+  let k = 6; while (k > 2 && Math.pow(k, fams.length) * Math.min(120, permutacoes(fams.map((_, i) => i)).length) > 12000) k--;
+  const opts = fams.map(gs => familyOptions(gs, P, o, Wp + 1e-6, k));
+  if (opts.some(x => !x.length)) return [];
+  const nomesF = fams.map(gs => familia(gs[0].tipo)), perms = permutacoes(nomesF).slice(0, 120);
+  // assinatura: onde cada familia fica; espelhar (esq/dir, cima/baixo) conta como a mesma arrumacao
+  const assin = rs => {
+    const bb = {};
+    rs.forEach(q => { const b = bb[q.f] ||= [1e9, 1e9, -1e9, -1e9]; b[0] = Math.min(b[0], q.x); b[1] = Math.min(b[1], q.y); b[2] = Math.max(b[2], q.x + q.w); b[3] = Math.max(b[3], q.y + q.h); });
+    const W0 = Math.max(...Object.values(bb).map(b => b[2])), L0 = Math.max(...Object.values(bb).map(b => b[3]));
+    const um = (fx, fy) => Object.keys(bb).sort().map(f => { let [x0, y0, x1, y1] = bb[f]; if (fx) [x0, x1] = [W0 - x1, W0 - x0]; if (fy) [y0, y1] = [L0 - y1, L0 - y0]; return f + [x0, y0, x1, y1].map(v => Math.round(v / 15)).join(','); }).join('|');
+    return [um(0, 0), um(1, 0), um(0, 1), um(1, 1)].sort()[0];
+  };
+  const atual = assin(Object.entries(base.ge).map(([id, g]) => ({ f: familia(id.split('#')[0]), x: g.x, y: g.y, w: g.w, h: g.h })));
+  const achados = new Map(), pick = [];
+  (function rec(i) {
+    if (i === fams.length) {
+      for (const pm of perms) for (let ord = 0; ord < 2; ord++) {
+        const r = placeBlocks(pick, Wp + 1e-6, ord, pm);
+        if (!r || r.L > Lp + 1e-6) continue;
+        const sig = assin(r.rects);
+        if (sig === atual) continue;   // igual a que ja esta na tela
+        if (!achados.has(sig) || achados.get(sig).reg > r.reg) achados.set(sig, r);
+      }
+      return;
+    }
+    for (const b of opts[i]) { pick[i] = b; rec(i + 1); }
+  })(0);
+  const caixa = { id: '', W: base.W, L: base.L, H: base.H };
+  return [...achados.values()].sort((a, b) => a.reg - b.reg).slice(0, max)
+    .map(r => naCaixa(assemble(r.blocks.map(b => ({ ...b, layer: 0, id: `${b.tipo}#0` })), P, o), caixa));
 }
 
 // melhor arranjo de um conjunto de grupos numa largura W (testa giros e numero de colunas)
@@ -275,6 +316,7 @@ const cabeCaixa = (n, c, minFill, o, P) =>
   n.H <= c.H && n.H / c.H >= minFill && (n.W * n.L) / (c.W * c.L) >= minFill &&
   (n.W <= c.W && n.L <= c.L || minL(n.pr, n.oo, P, c.W) <= c.L || minL(n.pr, n.oo, P, c.L) <= c.W);
 
+const PARECIDA = .10, PARECIDA_H = .25;   // ate 10% na planta (larg/comp) e 25% na altura: vira um modelo so
 // escolhe o MENOR numero de caixas (cobertura gulosa) que comporta todos os produtos
 function escolherCaixas(prods, o, P, minFill) {
   const need = prods.map(pr => {
@@ -293,9 +335,27 @@ function escolherCaixas(prods, o, P, minFill) {
     if (!best.cob.length) break;
     esc.push(best.c); best.cob.forEach(i => falta.delete(i));
   }
+  // caixas com medidas parecidas (ate PARECIDA de diferenca em cada lado) viram uma so, do tamanho da maior
+  for (;;) {
+    let best = null;
+    for (let i = 0; i < esc.length; i++) for (let j = i + 1; j < esc.length; j++) {
+      const a = esc[i], b = esc[j];
+      if (!['W', 'L', 'H'].every(k => Math.abs(a[k] - b[k]) / Math.max(a[k], b[k]) <= (k === 'H' ? PARECIDA_H : PARECIDA))) continue;
+      const u = { W: Math.max(a.W, b.W), L: Math.max(a.L, b.L), H: Math.max(a.H, b.H) };
+      const extra = u.W * u.L * u.H - Math.max(a.W * a.L * a.H, b.W * b.L * b.H);
+      if (!best || extra < best.extra) best = { i, j, u, extra };
+    }
+    if (!best) break;
+    esc.splice(best.j, 1); esc.splice(best.i, 1, best.u);
+  }
   esc.sort((x, y) => x.W * x.L * x.H - y.W * y.L * y.H);
-  const caixas = esc.map((c, i) => ({ ...c, id: String.fromCharCode(65 + i), produtos: [] }));
-  need.forEach(n => { const c = caixas.find(c => cabeCaixa(n, c, minFill, o, P)) || caixas.find(c => n.W <= c.W && n.L <= c.L && n.H <= c.H); if (c) c.produtos.push(n.nome); });
+  let caixas = esc.map(c => ({ ...c, produtos: [] }));
+  need.forEach(n => {
+    const c = caixas.find(c => cabeCaixa(n, c, minFill, o, P)) || caixas.find(c => cabeCaixa(n, c, 0, o, P)) || caixas.find(c => n.W <= c.W && n.L <= c.L && n.H <= c.H);
+    if (c) c.produtos.push(n.nome);
+  });
+  caixas = caixas.filter(c => c.produtos.length);   // caixa que ficou sem produto sai da linha
+  caixas.forEach((c, i) => { c.id = String.fromCharCode(65 + i); });
   return caixas;
 }
 
@@ -446,7 +506,7 @@ $('sug').addEventListener('click', e => {
 function calcCaixas() {
   const o = opts(), minFill = (+$('minfill').value || 40) / 100;
   CAIXAS = escolherCaixas(PRODUTOS, o, P, minFill);
-  $('caixas').innerHTML = `<p class="mut">${CAIXAS.length} caixas atendem ${PRODUTOS.length} produtos (aproveitamento mínimo de ${Math.round(minFill * 100)}% da planta e da altura; o produto pode ser reorganizado para caber).</p>` +
+  $('caixas').innerHTML = `<p class="mut">${CAIXAS.length} caixas atendem ${PRODUTOS.length} produtos (aproveitamento mínimo de ${Math.round(minFill * 100)}% da planta e da altura; o produto pode ser reorganizado para caber; caixas com até ${Math.round(PARECIDA * 100)}% de diferença na planta e ${Math.round(PARECIDA_H * 100)}% na altura viram uma só).</p>` +
     CAIXAS.map(c => `<details><summary><b>Caixa ${c.id}</b> · ${c.W} × ${c.L} × ${c.H} mm · ${c.produtos.length} produto(s)</summary><div class="mut">${c.produtos.join(' · ')}</div></details>`).join('');
   if (lastR) $('sug').innerHTML = sugerida(lastR);
   sugestoes();
@@ -491,7 +551,9 @@ function miniSVG(r, o, w = 168, h = 112) {
 function sugestoes() {
   const tok = ++_sugTok, { prod, o } = cur();
   SUG = []; $('sugs').innerHTML = '<span class="mut">pensando em organizações…</span>';
+  const base = lastR && (lastR.caixa ? lastR : result(prod, o)); let VAR = null;
   const tarefas = [
+    ...[0, 1, 2, 3, 4, 5].map(n => [`Opção ${n + 1}`, () => (VAR ||= variacoesNaMesmaCaixa(prod, o, base))[n] || null, null, 'mesma']),
     ['Mais compacta', () => build(prod, o, P)],
     ['Quadrada', () => build0(prod, { ...o, ratio: 1.05, peso: 4, forma: 'q' }, P)],
     ['Retangular', () => build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4, forma: 'r' }, P)],
@@ -503,10 +565,10 @@ function sugestoes() {
   (function passo() {
     if (tok !== _sugTok) return;
     if (i >= tarefas.length) { if (!SUG.length) $('sugs').innerHTML = '<span class="mut">sem sugestões</span>'; return; }
-    const [nome, fn, cx] = tarefas[i++];
+    const [nome, fn, cx, grupo] = tarefas[i++];
     let r = null; try { r = fn(); } catch (e) { r = null; }
     // nao sugerir caixa com muito espaco vazio nem proporcao extrema
-    if (r && !cx && (r.fill < .72 || Math.max(r.W, r.L) / Math.min(r.W, r.L) > 3.2)) r = null;
+    if (r && !cx && !grupo && (r.fill < .72 || Math.max(r.W, r.L) / Math.min(r.W, r.L) > 3.2)) r = null;
     if (r && cx && r.fill < .55) r = null;   // produto pequeno demais para essa caixa (fill ja e sobre a caixa inteira)   // produto pequeno demais para essa caixa
     if (r) {
       // o nome diz o que a caixa E, nao o que foi pedido: "Quadrada" que saiu retangular nao entra
@@ -517,13 +579,16 @@ function sugestoes() {
     if (r) {
       const sig = `${Math.round(r.W)}x${Math.round(r.L)}|` + r.blocks.map(b => `${b.tipo}${b.layer}${Math.round(b.x)},${Math.round(b.y)}${b.rot ? 'r' : ''}`).sort().join(';');
       if (!vistos.has(sig) && (nome.startsWith('Na Caixa') ? SUG.filter(s => s.caixa).length < 3 : true)) {
-        vistos.add(sig); SUG.push({ nome, r, caixa: nome.startsWith('Na Caixa') });
+        vistos.add(sig); SUG.push({ nome, r, caixa: nome.startsWith('Na Caixa'), grupo: grupo || 'outras' });
       }
     }
+    const titulos = { mesma: base ? `Na mesma caixa · ${Math.round(base.W)} × ${Math.round(base.L)} mm` : 'Na mesma caixa', outras: 'Outros tamanhos de caixa' };
     $('sugs').innerHTML = SUG.map((s, k) => {
+      const h = (k === 0 || SUG[k - 1].grupo !== s.grupo) ? `<p class="sg-h">${titulos[s.grupo]}</p>` : '';
+      if (s.grupo === 'mesma') return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">mesma caixa, outra arrumação</span></button>`;
       const c = CAIXAS.length ? caixaPara(up5(s.r.W), up5(s.r.L), up5(s.r.H)) : null;
       const rt = Math.max(s.r.W, s.r.L) / Math.min(s.r.W, s.r.L), fm = rt < 1.15 ? 'quadrada' : `retangular 1 : ${rt.toFixed(1).replace('.', ',')}`;
-      return `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">${fm}</span><span>${Math.round(s.r.W)} × ${Math.round(s.r.L)} × ${Math.round(s.r.H)} mm · ${Math.round(s.r.fill * 100)}%</span><span class="mut">${c ? 'Caixa ' + c.id : 'sem caixa padrão'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
+      return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">${fm}</span><span>${s.r.caixa && s.r.caixa.id ? 'caixa' : 'medida ideal'} ${up5(s.r.W)} × ${up5(s.r.L)} × ${up5(s.r.H)} mm · peças ocupam ${Math.round(s.r.fill * 100)}%</span><span class="mut">${s.r.caixa && s.r.caixa.id ? `vista dentro da Caixa padrão ${s.r.caixa.id}` : c ? `entra na Caixa padrão ${c.id} (${c.W} × ${c.L})` : 'nenhuma caixa padrão serve'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
     }).join('');
     setTimeout(passo, 0);
   })();
@@ -580,7 +645,7 @@ function render() {
   const { o, prod } = cur(), sl = slotOf(prod, o);
   if (sl.idx >= sl.items.length) sl.idx = -1;
   const r = lastR = result(prod, o);
-  $('dim').innerHTML = `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>${r.caixa ? `mm · Caixa padrão ${r.caixa.id} por dentro, com o combo dentro` : 'mm · medida exata das peças arrumadas (larg × comp × alt, por dentro)'}</small>`;
+  $('dim').innerHTML = `${fmt(r.W)} × ${fmt(r.L)} × ${fmt(r.H)} <small>${r.caixa ? (r.caixa.id ? `mm · Caixa padrão ${r.caixa.id} por dentro, com o combo dentro` : 'mm · mesma caixa, outra arrumação (por dentro)') : 'mm · medida exata das peças arrumadas (larg × comp × alt, por dentro)'}</small>`;
   $('sug').innerHTML = sugerida(r);
   const tipos = Object.entries(prod.itens).map(([t, q]) => `<span>${avatar(t, P[t].cor)}${q} ${P[t].nome} · ${P[t].w}×${P[t].d}×${P[t].h}</span>`).join('');
   $('meta').innerHTML = tipos;
