@@ -4,7 +4,7 @@ Dimensiona as caixas dos combos e peças do Kampeki Sushi (Porto Alegre) a parti
 (https://app.cardapioweb.com/kampeki_sushi_porto_alegre).
 
 - `data.js` — peças (medidas **estimadas**, editáveis na tela), combos e avulsos conforme o cardápio.
-- `app.js` — encaixe por blocos (um produto = um bloco, tudo colado), organizações salvas, arrastar e soltar,
+- `app.js` — encaixe por blocos (um produto = um bloco, tudo colado), organizações salvas (clique seleciona, R gira),
   caixas padrão (menor número de caixas).
 - `img/` — imagens das peças (recortadas, vista de cima) e `meta.json` com a área ocupada de cada uma.
 - `brand/logo.svg` — logo Kampeki; cor da marca `#ff8b86`.

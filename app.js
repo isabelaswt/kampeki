@@ -348,12 +348,12 @@ function shapeSVG(c, x, y, p, s, id) {
   return `${geo} fill="${p.cor}" stroke="#0004"/>`;
 }
 
-// ---- organizacoes salvas por produto + arrastar e soltar -----------------------
+// ---- organizacoes salvas por produto (escolher, girar, mudar de camada) -----------------------
 const STORE = 'kampeki-orgs-v1';
 let LAYS = {}; try { LAYS = JSON.parse(localStorage.getItem(STORE) || '{}'); } catch (e) { LAYS = {}; }
 const saveLays = () => { try { localStorage.setItem(STORE, JSON.stringify(LAYS)); } catch (e) { /* sem armazenamento */ } };
 const sel = new Set();
-let lastR = null, lastS = 1, lastGeo = null, lastKeys = new Set(), drag = null;
+let lastR = null, lastKeys = new Set();
 const cur = () => ({ o: opts(), prod: PRODUTOS[$('sel').value] });
 const slotOf = (prod, o) => (LAYS[prod.nome + '|' + o.layers] ||= { idx: -1, items: [] });
 const plain = bl => bl.map(({ id, tipo, qtd, rot, cols, x, y, layer }) => ({ id, tipo, qtd, rot, cols, x, y, layer }));
@@ -366,7 +366,7 @@ function result(prod, o) {
   return build(prod, o, P);
 }
 
-// rolls (uramaki, hossomaki, hot, futomaki) se arrastam em bloco; o resto (niguiri, gunkan, sashimi...) peca por peca
+// rolls (uramaki, hossomaki, hot, futomaki) se selecionam em bloco; o resto (niguiri, gunkan, sashimi...) peca por peca
 const ROLL = t => /^(uramaki|hosso|hot)_|^futo$/.test(t);
 function explode(bl) {
   const { o } = cur();
@@ -389,16 +389,6 @@ function editBlocks() {   // organizacao editavel; se esta no automatico, cria u
 function normalize(bl) {
   const mx = Math.min(...bl.map(b => b.x)), my = Math.min(...bl.map(b => b.y));
   bl.forEach(b => { b.x -= mx; b.y -= my; });
-}
-function livre(b, bl, o) {   // primeiro lugar livre (mais baixo, mais a esquerda) para o bloco na camada dele
-  const g = geomBlock(b, P, o), os = bl.filter(x => x.id !== b.id && x.layer === b.layer).map(x => ({ ...x, ...(({ w, h }) => ({ w, h }))(geomBlock(x, P, o)) }));
-  const xs = [0, ...os.map(x => x.x + x.w)], ys = [0, ...os.map(x => x.y + x.h)];
-  let best = null;
-  for (const y of ys) for (const x of xs) {
-    if (os.some(q => hit({ x, y, w: g.w, h: g.h }, q))) continue;
-    if (!best || y < best.y - .01 || (Math.abs(y - best.y) < .01 && x < best.x)) best = { x, y };
-  }
-  return best;
 }
 let CAIXAS = [];   // caixas padrao calculadas para todos os produtos
 function caixaPara(w, l, h) {   // menor caixa padrao que comporta (sem exigir aproveitamento minimo)
@@ -508,10 +498,7 @@ $('sugs').addEventListener('click', e => {
 
 function stageSVG(r, o, opt = {}) {
   const li = Math.min(layerIdx, r.packs.length - 1), pack = r.packs[li];
-  let s, ox, oy;
-  if (opt.lock) ({ s, ox, oy } = opt.lock);   // durante o arraste a escala fica travada
-  else { s = Math.min((VW - 2 * PAD) / r.W, (VH - 2 * PAD) / r.L); ox = (VW - r.W * s) / 2; oy = (VH - r.L * s) / 2; }
-  lastS = s; lastGeo = { s, ox, oy };
+  const s = Math.min((VW - 2 * PAD) / r.W, (VH - 2 * PAD) / r.L), ox = (VW - r.W * s) / 2, oy = (VH - r.L * s) / 2;
   const bw = r.W * s, bl = r.L * s;
   const byB = {}, geo = {};
   pack.placed.forEach((c, i) => {
@@ -520,29 +507,23 @@ function stageSVG(r, o, opt = {}) {
     let svg;
     if (!c.rot) svg = shapeSVG(c, x, y, p, s, 'cl' + i);
     else { const cx = x + fw / 2, cy = y + fd / 2; svg = `<g transform="rotate(90 ${cx} ${cy})">${shapeSVG(c, cx - c.ow * s / 2, cy - c.od * s / 2, p, s, 'cl' + i)}</g>`; }
-    // rolls arrastam em bloco; o resto (niguiri, gunkan, sashimi...) peca por peca
+    // rolls selecionam em bloco; o resto (niguiri, gunkan, sashimi...) peca por peca
     const key = ROLL(c.tipo) || c.bid.includes(':') ? c.bid : `${c.bid}:${c.ci}`;
     (byB[key] ||= []).push(svg);
     if (ROLL(c.tipo)) geo[key] = { x: ox + (o.margin + r.ge[c.bid].x) * s, y: oy + (o.margin + r.ge[c.bid].y) * s, w: r.ge[c.bid].w * s, h: r.ge[c.bid].h * s };
     else geo[key] = { x: ox + (o.margin + c.x) * s, y: oy + (o.margin + c.y) * s, w: (c.rot ? c.od : c.ow) * s, h: (c.rot ? c.ow : c.od) * s };
   });
   lastKeys = new Set(Object.keys(byB));
-  let slots = '', floats = '';
   const blocos = Object.entries(byB).map(([bid, parts]) => {
     const g = geo[bid], on = sel.has(bid);
     const rx = g.x, ry = g.y;
-    const grp = `<g class="blk" data-bid="${bid}">${parts.join('')}<rect class="hit" data-bid="${bid}" x="${rx}" y="${ry}" width="${g.w}" height="${g.h}" fill="transparent" ${on ? 'stroke="#141413" stroke-dasharray="5 3" stroke-width="1.5"' : ''} style="cursor:grab"/></g>`;
-    if (opt.floatIds && opt.floatIds.has(bid)) {   // area destacada onde a peca vai entrar + a peca acompanhando o cursor
-      slots += `<rect x="${rx}" y="${ry}" width="${g.w}" height="${g.h}" rx="6" fill="rgba(255,139,134,.30)" stroke="#ff8b86" stroke-width="2" stroke-dasharray="6 3"/>`;
-      floats += `<g transform="translate(${opt.fx},${opt.fy})" opacity=".85" style="pointer-events:none">${grp}</g>`;
-      return '';
-    }
+    const grp = `<g class="blk" data-bid="${bid}">${parts.join('')}<rect class="hit" data-bid="${bid}" x="${rx}" y="${ry}" width="${g.w}" height="${g.h}" fill="transparent" ${on ? 'stroke="#141413" stroke-dasharray="5 3" stroke-width="1.5"' : ''} style="cursor:pointer"/></g>`;
     return grp;
   }).join('');
   const dimTxt = (x, y, t, rot) => `<text x="${x}" y="${y}" font-size="13" text-anchor="middle" fill="currentColor" ${rot ? `transform="rotate(-90 ${x} ${y})"` : ''}>${t}</text>`;
   return `<svg viewBox="0 0 ${VW} ${VH}" width="${VW}" height="${VH}" role="img" style="touch-action:none">
     <rect x="${ox}" y="${oy}" width="${bw}" height="${bl}" fill="none" stroke="#ff8b86" stroke-width="3" rx="3"/>
-    ${slots}${blocos}${floats}
+    ${blocos}
     <line x1="${ox}" y1="${oy - 14}" x2="${ox + bw}" y2="${oy - 14}" stroke="currentColor"/>${dimTxt(VW / 2, oy - 20, fmt(r.W) + ' mm')}
     <line x1="${ox + bw + 14}" y1="${oy}" x2="${ox + bw + 14}" y2="${oy + bl}" stroke="currentColor"/>${dimTxt(ox + bw + 28, VH / 2, fmt(r.L) + ' mm', true)}
   </svg>`;
@@ -563,7 +544,7 @@ function render() {
   const nSel = [...sel].filter(k => lastKeys.has(k)).length;
   $('btnRot').disabled = !nSel;
   $('btnLayer').disabled = !nSel || o.layers < 2;
-  $('hint').textContent = nSel ? `${nSel} selecionado(s) · arraste para mover juntos · R gira · Esc limpa` : 'Arraste para organizar · Shift/⌘+clique ou arraste no fundo seleciona vários · R ou duplo clique gira';
+  $('hint').textContent = nSel ? `${nSel} selecionado(s) · R ou Girar bloco gira · Esc limpa` : 'Clique numa peça para selecionar · Shift/⌘+clique seleciona várias · R ou duplo clique gira';
   $('btnRename').disabled = $('btnDel').disabled = sl.idx < 0;
   $('views').innerHTML = stageSVG(r, o);
   tabelaTodos(o);
@@ -586,8 +567,7 @@ function tabelaTodos(o) {
 }
 $('tabs').addEventListener('click', e => { if (e.target.dataset.i) { layerIdx = +e.target.dataset.i; sel.clear(); render(); } });
 
-// arrastar (uma ou varias pecas selecionadas): a peca entra ao lado de outra e a vizinha e empurrada;
-// a area destacada mostra onde ela vai entrar
+// o que ficar no caminho de uma peca girada e empurrado para o lado
 function empurrar(bl, movidos, eixo, sinal) {
   const { o } = cur(), G = {};
   bl.forEach(b => { const g = geomBlock(b, P, o); G[b.id] = { w: g.w, h: g.h }; });
@@ -604,77 +584,16 @@ function empurrar(bl, movidos, eixo, sinal) {
   }
   return bl;
 }
-const laco = document.createElement('div');
-laco.style.cssText = 'position:fixed;display:none;border:1.5px dashed #141413;background:rgba(255,139,134,.18);pointer-events:none;z-index:50';
-document.body.appendChild(laco);
-$('views').addEventListener('pointerdown', e => {
-  const svg = $('views').querySelector('svg'); if (!svg) return;
-  const h = e.target.closest('.hit'), a = svg.getScreenCTM().a, add = e.shiftKey || e.metaKey || e.ctrlKey;
-  try { $('views').setPointerCapture(e.pointerId); } catch (err) { /* sem captura: segue sem */ }
-  if (!h) {   // fundo: laco de selecao
-    drag = { marquee: true, sx: e.clientX, sy: e.clientY, add };
-    if (!add) sel.clear();
-    return;
-  }
+// sem arrastar e soltar (dificil de usar): clique seleciona, Shift/⌘+clique soma, R ou duplo clique gira
+$('views').addEventListener('click', e => {
+  const h = e.target.closest('.hit');
+  if (!h) { if (sel.size) { sel.clear(); render(); } return; }
   const id = h.dataset.bid;
-  if (add) { sel.has(id) ? sel.delete(id) : sel.add(id); drag = null; render(); return; }
-  if (!sel.has(id)) { sel.clear(); sel.add(id); }
-  drag = { bid: id, sx: e.clientX, sy: e.clientY, k: 1 / (a * lastS), lock: { ...lastGeo }, moved: false, b: null, prop: null, raf: 0 };
-});
-$('views').addEventListener('pointermove', e => {
-  if (!drag) return;
-  if (drag.marquee) {
-    const x0 = Math.min(drag.sx, e.clientX), y0 = Math.min(drag.sy, e.clientY), x1 = Math.max(drag.sx, e.clientX), y1 = Math.max(drag.sy, e.clientY);
-    Object.assign(laco.style, { display: 'block', left: x0 + 'px', top: y0 + 'px', width: x1 - x0 + 'px', height: y1 - y0 + 'px' });
-    drag.box = [x0, y0, x1, y1]; return;
-  }
-  const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
-  if (!drag.moved && Math.hypot(dx, dy) < 4) return;
-  drag.cx = e.clientX; drag.cy = e.clientY;
-  if (drag.raf) return;
-  drag.raf = requestAnimationFrame(() => { drag.raf = 0; if (drag && !drag.marquee) arrasto(); });
-});
-function arrasto() {
-  const { o } = cur(), dx = drag.cx - drag.sx, dy = drag.cy - drag.sy;
-  if (!drag.b) {   // primeiro movimento: garante organizacao editavel e congela os dados do arraste
-    const bl = editBlocks(); drag.bl = bl;
-    drag.base = bl.map(b => ({ ...b }));
-    drag.ids = new Set([...sel].filter(id => bl.some(b => b.id === id)));
-    drag.b = drag.base.find(b => b.id === drag.bid);
-    if (!drag.b) { drag = null; return; }
-    drag.ids.add(drag.bid); drag.x0 = drag.b.x; drag.y0 = drag.b.y; drag.moved = true;
-    drag.ge = {}; drag.base.forEach(b => { const g = geomBlock(b, P, o); drag.ge[b.id] = { w: g.w, h: g.h }; });
-  }
-  const m = drag.b, g = drag.ge[m.id];
-  const os = drag.base.filter(x => !drag.ids.has(x.id) && x.layer === m.layer).map(x => ({ ...x, ...drag.ge[x.id] }));
-  const T = 5, snap = (v, c) => { let best = v, d = T; for (const q of c) if (Math.abs(q - v) < d) { d = Math.abs(q - v); best = q; } return best; };
-  const px = drag.x0 + dx * drag.k, py = drag.y0 + dy * drag.k;   // posicao livre do cursor (mm)
-  const nx = snap(px, os.flatMap(q => [q.x, q.x + q.w, q.x + q.w - g.w, q.x - g.w])), ny = snap(py, os.flatMap(q => [q.y, q.y + q.h, q.y + q.h - g.h, q.y - g.h]));
-  const eixo = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y', sinal = (eixo === 'x' ? dx : dy) >= 0 ? 1 : -1;
-  const prop = drag.base.map(b => ({ ...b }));
-  prop.forEach(b => { if (drag.ids.has(b.id)) { b.x += nx - drag.x0; b.y += ny - drag.y0; } });
-  empurrar(prop, drag.ids, eixo, sinal);
-  drag.prop = prop;
-  const r2 = assemble(prop, P, o);
-  $('views').innerHTML = stageSVG(r2, o, { lock: drag.lock, floatIds: drag.ids, fx: (px - nx) * drag.lock.s, fy: (py - ny) * drag.lock.s });
-}
-const endDrag = () => {
-  if (!drag) return;
-  const d = drag; drag = null;
-  if (d.marquee) {
-    laco.style.display = 'none';
-    if (d.box) {
-      const [x0, y0, x1, y1] = d.box;
-      $('views').querySelectorAll('.hit').forEach(h => { const b = h.getBoundingClientRect(); if (b.right > x0 && b.left < x1 && b.bottom > y0 && b.top < y1) sel.add(h.dataset.bid); });
-    }
-  } else if (d.moved && d.prop) {
-    d.prop.forEach(p => { const b = d.bl.find(x => x.id === p.id); if (b) { b.x = p.x; b.y = p.y; } });
-    normalize(d.bl); saveLays();
-  }
+  if (e.shiftKey || e.metaKey || e.ctrlKey) sel.has(id) ? sel.delete(id) : sel.add(id);
+  else if (sel.size === 1 && sel.has(id)) sel.clear();
+  else { sel.clear(); sel.add(id); }
   render();
-};
-$('views').addEventListener('pointerup', endDrag);
-$('views').addEventListener('pointercancel', endDrag);
+});
 
 // girar a selecao (uma ou varias pecas, em torno do centro do conjunto) / mudar de camada
 function selecionados(bl) { return bl.filter(b => sel.has(b.id)); }
