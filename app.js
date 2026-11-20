@@ -104,8 +104,16 @@ function variacoesNaMesmaCaixa(prod, o, base, max = 6) {
   const groups = Object.entries(prod.itens).map(([tipo, qtd]) => ({ tipo, qtd }));
   const fams = Object.values(groups.reduce((acc, g) => ((acc[familia(g.tipo)] ||= []).push(g), acc), {}));
   if (fams.length < 2) return [];
-  let k = 6; while (k > 2 && Math.pow(k, fams.length) * Math.min(120, permutacoes(fams.map((_, i) => i)).length) > 12000) k--;
-  const opts = fams.map(gs => familyOptions(gs, P, o, Wp + 1e-6, k));
+  let k = 6; while (k > 3 && Math.pow(k, fams.length) * Math.min(120, permutacoes(fams.map((_, i) => i)).length) > 12000) k--;
+  // formatos variados de cada familia: sempre um em pe (coluna), um deitado (fileira) e um quadrado, nas duas direcoes da peca
+  const diversos = (lista, n) => {
+    const ok = lista.filter(b => b.h <= Lp + 1e-6 && b.vazio <= .15 * b.w * b.h), esc = [], vistos = new Set();
+    const tipoF = b => `${b.subs[0].rot}|${b.w / b.h < .8 ? 'pe' : b.w / b.h > 1.25 ? 'deitado' : 'quadrado'}`;
+    for (const b of ok) if (!vistos.has(tipoF(b))) { vistos.add(tipoF(b)); esc.push(b); }
+    for (const b of ok) if (esc.length < n && !esc.includes(b)) esc.push(b);
+    return esc.slice(0, Math.max(n, vistos.size));
+  };
+  const opts = fams.map(gs => diversos(familyOptions(gs, P, o, Wp + 1e-6, 99), k));
   if (opts.some(x => !x.length)) return [];
   const nomesF = fams.map(gs => familia(gs[0].tipo)), perms = permutacoes(nomesF).slice(0, 120);
   // assinatura: onde cada familia fica; espelhar (esq/dir, cima/baixo) conta como a mesma arrumacao
@@ -131,9 +139,17 @@ function variacoesNaMesmaCaixa(prod, o, base, max = 6) {
     }
     for (const b of opts[i]) { pick[i] = b; rec(i + 1); }
   })(0);
-  const caixa = { id: '', W: base.W, L: base.L, H: base.H };
-  return [...achados.values()].sort((a, b) => a.reg - b.reg).slice(0, max)
-    .map(r => naCaixa(assemble(r.blocks.map(b => ({ ...b, layer: 0, id: `${b.tipo}#0` })), P, o), caixa));
+  const caixa = { id: base.caixa ? base.caixa.id : '', W: base.W, L: base.L, H: base.H };
+  // escolhe variado: primeiro um de cada combinacao de formatos (ex.: niguiri em coluna x em fileira), depois os mais regulares
+  // cada opcao nova deve trazer o maior numero de formatos ainda nao vistos (familia + direcao + colunas)
+  const formas = r => [...new Set(r.blocks.map(b => familia(b.tipo) + (b.rot ? 'R' : 'N') + b.cols))];
+  const ord = [...achados.values()].sort((a, b) => a.reg - b.reg), esc = [], cobertas = new Set();
+  while (esc.length < max && esc.length < ord.length) {
+    let best = null, bestN = -1;
+    for (const r of ord) { if (esc.includes(r)) continue; const n = formas(r).filter(f => !cobertas.has(f)).length; if (n > bestN) { best = r; bestN = n; } }
+    esc.push(best); formas(best).forEach(f => cobertas.add(f));
+  }
+  return esc.map(r => naCaixa(assemble(r.blocks.map(b => ({ ...b, layer: 0, id: `${b.tipo}#0` })), P, o), caixa));
 }
 
 // melhor arranjo de um conjunto de grupos numa largura W (testa giros e numero de colunas)
@@ -316,6 +332,9 @@ const cabeCaixa = (n, c, minFill, o, P) =>
   n.H <= c.H && n.H / c.H >= minFill && (n.W * n.L) / (c.W * c.L) >= minFill &&
   (n.W <= c.W && n.L <= c.L || minL(n.pr, n.oo, P, c.W) <= c.L || minL(n.pr, n.oo, P, c.L) <= c.W);
 
+const EXTRA_KEY = 'kampeki-caixas-extra';
+let EXTRAS = []; try { EXTRAS = JSON.parse(localStorage.getItem(EXTRA_KEY) || '[]'); } catch (e) { EXTRAS = []; }
+const saveExtras = () => { try { localStorage.setItem(EXTRA_KEY, JSON.stringify(EXTRAS)); } catch (e) { /* sem armazenamento */ } };
 const PARECIDA = .10, PARECIDA_H = .25;   // ate 10% na planta (larg/comp) e 25% na altura: vira um modelo so
 // escolhe o MENOR numero de caixas (cobertura gulosa) que comporta todos os produtos
 function escolherCaixas(prods, o, P, minFill) {
@@ -325,7 +344,10 @@ function escolherCaixas(prods, o, P, minFill) {
     return { pr, oo, nome: pr.nome, W: up5(b.W), L: up5(b.L), H: up5(b.H) };
   });
   const cand = [...new Map(need.map(n => [`${n.W}x${n.L}x${n.H}`, { W: n.W, L: n.L, H: n.H }])).values()];
-  let falta = new Set(need.map((_, i) => i)); const esc = [];
+  let falta = new Set(need.map((_, i) => i));
+  // caixas que voce adicionou a linha entram primeiro e ja levam os produtos que servem bem nelas
+  const esc = EXTRAS.map(c => ({ W: c.W, L: c.L, H: c.H }));
+  esc.forEach(c => [...falta].forEach(i => { if (cabeCaixa(need[i], c, minFill, o, P)) falta.delete(i); }));
   while (falta.size) {
     let best = null;
     for (const c of cand) {
@@ -491,23 +513,57 @@ function sugerida(r) {
   const btn = vendo ? `<button data-auto>Voltar à caixa ideal</button>` : `<button data-ver="${c.id}">Ver o combo na Caixa ${c.id}</button>`;
   const padrao = `<div class="cxc pad${vendo ? ' on' : ''}"><span class="k">Caixa padrão mais próxima</span><span class="v">${c.id} · ${c.W} × ${c.L} × ${c.H}</span><span class="d">${mais} · sobra ${sobra}% do fundo</span>${btn}</div>`;
   const outros = c.produtos.filter(n => n !== prod.nome);
-  const why = `<p class="why">Para não fazer uma caixa para cada produto, o cardápio inteiro (${PRODUTOS.length} produtos) foi agrupado em <b>${CAIXAS.length} caixas padrão</b>. ${outros.length ? `A Caixa ${c.id} também atende: ${outros.slice(0, 5).join(', ')}${outros.length > 5 ? ` e mais ${outros.length - 5}` : ''}.` : ''}</p>`;
+  const nova = PROPS.find(p => p.m.some(x => x.pr.nome === prod.nome));
+  const dica = nova && c.W * c.L > nova.S.W * nova.S.L ? ` <b>Sugestão:</b> uma caixa nova de ${nova.S.W} × ${nova.S.L} × ${nova.S.H} mm atenderia este e mais ${nova.m.length - 1} combo(s) com bem menos sobra — veja em Caixas padrão.` : '';
+  const why = `<p class="why">Para não fazer uma caixa para cada produto, o cardápio inteiro (${PRODUTOS.length} produtos) foi agrupado em <b>${CAIXAS.length} caixas padrão</b>. ${outros.length ? `A Caixa ${c.id} também atende: ${outros.slice(0, 5).join(', ')}${outros.length > 5 ? ` e mais ${outros.length - 5}` : ''}.` : ''}${dica}</p>`;
   return av + `<div class="cx2">${ideal}<span class="seta">→</span>${padrao}</div>` + why;
 }
 $('sug').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   const { prod, o } = cur(), sl = slotOf(prod, o);
-  if ('auto' in b.dataset) { sl.idx = -1; saveLays(); sel.clear(); layerIdx = 0; render(); return; }
+  if ('auto' in b.dataset) { sl.idx = -1; saveLays(); sel.clear(); layerIdx = 0; render(); sugestoes(); return; }
   const c = CAIXAS.find(x => x.id === b.dataset.ver); if (!c) return;
-  const x = layoutNaCaixa(prod, o, c) || lastR;   // rearruma para caber; se nao der, usa a organizacao atual
-  sel.clear(); layerIdx = 0; novaOrg(x.blocks, `Na Caixa ${c.id}`, { id: c.id, W: c.W, L: c.L, H: c.H }); render();
+  const x = layoutNaCaixa(prod, o, c); if (!x) return;   // rearruma para caber (com a caixa deitada ou virada)
+  sel.clear(); layerIdx = 0; novaOrg(x.blocks, `Na Caixa ${c.id}`, x.caixaVista); render(); sugestoes();
 });
 
+// caixa NOVA sugerida: quando 2 ou mais combos sobram muito (> 25% do fundo) na caixa padrao deles,
+// procura uma medida que sirva bem a eles (pecas ocupando >= 60% do fundo). Ate 2 sugestoes.
+let PROPS = [];
+function sugerirCaixasNovas(o) {
+  const LIM = .25, MIN_OCUPA = .65;
+  const combos = PRODUTOS.filter(p => p.grupo === 'Combos').map(pr => {
+    const oo = { ...o, layers: pr.camadas || 1 }, b = build(pr, oo, P), c = caixaProxima(pr, oo, b), area = b.fill * b.W * b.L;
+    return { pr, oo, b, c, area, sobra: c ? 1 - area / (c.W * c.L) : 1 };
+  });
+  let folgados = combos.filter(x => x.sobra > LIM);
+  const cabe = (x, S) => up5(x.b.H) <= S.H && x.area / (S.W * S.L) >= MIN_OCUPA &&
+    (up5(x.b.W) <= S.W && up5(x.b.L) <= S.L || minL(x.pr, x.oo, P, S.W) <= S.L || minL(x.pr, x.oo, P, S.L) <= S.W);
+  const props = [];
+  while (props.length < 2 && folgados.length >= 2) {
+    const ideal = x => ({ W: up5(x.b.W), L: up5(x.b.L), H: up5(x.b.H) }), cands = [];
+    folgados.forEach((a, i) => { const A = ideal(a); cands.push(A); folgados.slice(i + 1).forEach(b2 => { const B = ideal(b2); cands.push({ W: Math.max(A.W, B.W), L: Math.max(A.L, B.L), H: Math.max(A.H, B.H) }); }); });
+    let best = null;
+    for (const S of cands) {
+      const m = folgados.filter(x => cabe(x, S));
+      if (m.length >= 2 && (!best || m.length > best.m.length || (m.length === best.m.length && S.W * S.L < best.S.W * best.S.L))) best = { S, m };
+    }
+    if (!best) break;
+    props.push(best); folgados = folgados.filter(x => !best.m.includes(x));
+  }
+  return props;
+}
 function calcCaixas() {
   const o = opts(), minFill = (+$('minfill').value || 40) / 100;
   CAIXAS = escolherCaixas(PRODUTOS, o, P, minFill);
   $('caixas').innerHTML = `<p class="mut">${CAIXAS.length} caixas atendem ${PRODUTOS.length} produtos (aproveitamento mínimo de ${Math.round(minFill * 100)}% da planta e da altura; o produto pode ser reorganizado para caber; caixas com até ${Math.round(PARECIDA * 100)}% de diferença na planta e ${Math.round(PARECIDA_H * 100)}% na altura viram uma só).</p>` +
-    CAIXAS.map(c => `<details><summary><b>Caixa ${c.id}</b> · ${c.W} × ${c.L} × ${c.H} mm · ${c.produtos.length} produto(s)</summary><div class="mut">${c.produtos.join(' · ')}</div></details>`).join('');
+    CAIXAS.map(c => `<details><summary><b>Caixa ${c.id}</b> · ${c.W} × ${c.L} × ${c.H} mm · ${c.produtos.length} produto(s)</summary><div class="mut">${c.produtos.join(' · ')}</div></details>`).join('') +
+    (EXTRAS.length ? `<p class="mut extras">Adicionadas por você: ${EXTRAS.map((c, k) => `${c.W} × ${c.L} × ${c.H} mm <button data-rm="${k}">remover</button>`).join(' · ')}</p>` : '');
+  PROPS = sugerirCaixasNovas(o);
+  $('caixas').innerHTML += PROPS.map((p, k) => `<div class="nova"><span class="k">Sugestão de caixa nova</span><span class="v">${p.S.W} × ${p.S.L} × ${p.S.H} mm</span>
+    <span class="d">Atende ${p.m.length} combos que hoje sobram muito na caixa padrão:</span>
+    <ul>${p.m.map(x => `<li>${x.pr.nome} — hoje na Caixa ${x.c ? x.c.id : '?'}, sobra ${Math.round(x.sobra * 100)}% → nesta, sobra ${Math.round((1 - x.area / (p.S.W * p.S.L)) * 100)}%</li>`).join('')}</ul>
+    <button data-add="${k}">Adicionar à linha de caixas</button></div>`).join('');
   if (lastR) $('sug').innerHTML = sugerida(lastR);
   sugestoes();
 }
@@ -526,16 +582,20 @@ function linhasResult(prod, o, strat) {   // um produto por fileira (row) ou por
   if (!best) return null;
   return assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
 }
-function layoutNaCaixa(prod, o, c) {   // rearranja o produto para caber DENTRO da caixa padrao
+function layoutNaCaixa(prod, o, c) {   // rearranja o produto para caber DENTRO da caixa padrao (deitada ou virada)
   const m = 2 * o.margin - o.gap; let best = null;
-  for (const v of variantsOf(prod, o, P)) {
-    const rs = v.map(l => packAt(l, o, P, c.W - m, true));
-    if (rs.some(r => !r)) continue;
-    const L = Math.max(...rs.map(r => r.L)) + m;
-    if (L <= c.L + 1e-6 && (!best || L < best.L)) best = { rs, L };
+  for (const vira of [false, true]) {   // virada: a caixa e a mesma, so vista de lado (largura e comprimento trocados)
+    const CW = vira ? c.L : c.W, CL = vira ? c.W : c.L;
+    for (const v of variantsOf(prod, o, P)) {
+      const rs = v.map(l => packAt(l, o, P, CW - m, true));
+      if (rs.some(r => !r)) continue;
+      const L = Math.max(...rs.map(r => r.L)) + m;
+      if (L <= CL + 1e-6 && (!best || L / CL < best.L / best.CL)) best = { rs, L, CL, vista: { id: c.id, W: CW, L: CL, H: c.H } };
+    }
   }
   if (!best) return null;
-  return assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
+  const r = assemble(best.rs.flatMap((r, li) => r.blocks.map(b => ({ ...b, layer: li, id: `${b.tipo}#${li}` }))), P, o);
+  r.caixaVista = best.vista; return r;
 }
 function miniSVG(r, o, w = 168, h = 112) {
   const s = Math.min((w - 8) / (r.W + 2 * PAREDE), (h - 8) / (r.L + 2 * PAREDE)), ox = (w - r.W * s) / 2, oy = (h - r.L * s) / 2;
@@ -551,44 +611,49 @@ function miniSVG(r, o, w = 168, h = 112) {
 function sugestoes() {
   const tok = ++_sugTok, { prod, o } = cur();
   SUG = []; $('sugs').innerHTML = '<span class="mut">pensando em organizações…</span>';
-  const base = lastR && (lastR.caixa ? lastR : result(prod, o)); let VAR = null;
+  const base = lastR && (lastR.caixa ? lastR : result(prod, o));
+  const titulos = { mesma: base ? `Na mesma caixa · ${Math.round(base.W)} × ${Math.round(base.L)} mm` : 'Na mesma caixa', outras: 'Outros formatos (caixa sob medida)' };
+  // cada tarefa devolve uma lista de { nome, r }
+  const um = (nome, fn) => () => { const r = fn(); return r ? [{ nome, r }] : []; };
   const tarefas = [
-    ...[0, 1, 2, 3, 4, 5].map(n => [`Opção ${n + 1}`, () => (VAR ||= variacoesNaMesmaCaixa(prod, o, base))[n] || null, null, 'mesma']),
-    ['Mais compacta', () => build(prod, o, P)],
-    ['Quadrada', () => build0(prod, { ...o, ratio: 1.05, peso: 4, forma: 'q' }, P)],
-    ['Retangular', () => build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4, forma: 'r' }, P)],
-    ['Uma fileira por produto', () => linhasResult(prod, o, 'row')],
-    ['Uma coluna por produto', () => linhasResult(prod, o, 'col')],
+    ['mesma', () => variacoesNaMesmaCaixa(prod, o, base, 6).map((r, n) => ({ nome: `Opção ${n + 1}`, r }))],
+    ['outras', um('Mais compacta', () => build(prod, o, P))],
+    ['outras', um('Quadrada', () => build0(prod, { ...o, ratio: 1.05, peso: 4, forma: 'q' }, P))],
+    ['outras', um('Retangular', () => build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4, forma: 'r' }, P))],
+    ['outras', um('Uma fileira por produto', () => linhasResult(prod, o, 'row'))],
+    ['outras', um('Uma coluna por produto', () => linhasResult(prod, o, 'col'))],
   ];
-  CAIXAS.filter(c => { const n = { pr: prod, oo: o, W: 0, L: 0, H: 0 }; return true; }).slice(0, 14).forEach(c => tarefas.push([`Na Caixa ${c.id} (${c.W}×${c.L})`, () => { const x = layoutNaCaixa(prod, o, c); return x && naCaixa(x, c); }, c]));
+  // as 2 caixas padrao menores em que o combo cabe sem sobrar demais: arrumacao automatica + variacoes dentro delas
+  let nPad = 0;
+  CAIXAS.forEach(c => tarefas.push([`cx:${c.id}`, () => {
+    if (nPad >= 2) return [];
+    const lay = layoutNaCaixa(prod, o, c); if (!lay) return [];
+    const b = naCaixa(lay, lay.caixaVista); if (b.fill < .5) return [];
+    nPad++; titulos[`cx:${c.id}`] = `Na Caixa padrão ${c.id} · ${c.W} × ${c.L} mm`;
+    return [{ nome: 'Arrumação automática', r: b }, ...variacoesNaMesmaCaixa(prod, o, b, 4).map((r, n) => ({ nome: `Opção ${n + 1}`, r }))];
+  }]));
   const vistos = new Set(); let i = 0;
   (function passo() {
     if (tok !== _sugTok) return;
     if (i >= tarefas.length) { if (!SUG.length) $('sugs').innerHTML = '<span class="mut">sem sugestões</span>'; return; }
-    const [nome, fn, cx, grupo] = tarefas[i++];
-    let r = null; try { r = fn(); } catch (e) { r = null; }
-    // nao sugerir caixa com muito espaco vazio nem proporcao extrema
-    if (r && !cx && !grupo && (r.fill < .72 || Math.max(r.W, r.L) / Math.min(r.W, r.L) > 3.2)) r = null;
-    if (r && cx && r.fill < .55) r = null;   // produto pequeno demais para essa caixa (fill ja e sobre a caixa inteira)   // produto pequeno demais para essa caixa
-    if (r) {
-      // o nome diz o que a caixa E, nao o que foi pedido: "Quadrada" que saiu retangular nao entra
-      const ratio = Math.max(r.W, r.L) / Math.min(r.W, r.L);
-      if (nome === 'Quadrada' && ratio > 1.15) r = null;
-      if (nome === 'Retangular' && ratio < 1.15) r = null;
-    }
-    if (r) {
-      const sig = `${Math.round(r.W)}x${Math.round(r.L)}|` + r.blocks.map(b => `${b.tipo}${b.layer}${Math.round(b.x)},${Math.round(b.y)}${b.rot ? 'r' : ''}`).sort().join(';');
-      if (!vistos.has(sig) && (nome.startsWith('Na Caixa') ? SUG.filter(s => s.caixa).length < 3 : true)) {
-        vistos.add(sig); SUG.push({ nome, r, caixa: nome.startsWith('Na Caixa'), grupo: grupo || 'outras' });
+    const [grupo, fn] = tarefas[i++];
+    let lista = []; try { lista = fn() || []; } catch (e) { lista = []; }
+    for (let { nome, r } of lista) {
+      // sob medida: nao sugerir caixa com muito espaco vazio nem proporcao extrema; o nome diz o que a caixa E
+      if (grupo === 'outras') {
+        const ratio = Math.max(r.W, r.L) / Math.min(r.W, r.L);
+        if (r.fill < .72 || ratio > 3.2 || (nome === 'Quadrada' && ratio > 1.15) || (nome === 'Retangular' && ratio < 1.15)) continue;
       }
+      const sig = `${Math.round(r.W)}x${Math.round(r.L)}|` + r.blocks.map(b => `${b.tipo}${b.layer}${Math.round(b.x)},${Math.round(b.y)}${b.rot ? 'r' : ''}`).sort().join(';');
+      if (vistos.has(sig)) continue;
+      vistos.add(sig); SUG.push({ nome, r, grupo });
     }
-    const titulos = { mesma: base ? `Na mesma caixa · ${Math.round(base.W)} × ${Math.round(base.L)} mm` : 'Na mesma caixa', outras: 'Outros tamanhos de caixa' };
     $('sugs').innerHTML = SUG.map((s, k) => {
       const h = (k === 0 || SUG[k - 1].grupo !== s.grupo) ? `<p class="sg-h">${titulos[s.grupo]}</p>` : '';
-      if (s.grupo === 'mesma') return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">mesma caixa, outra arrumação</span></button>`;
+      if (s.grupo !== 'outras') return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">peças ocupam ${Math.round(s.r.fill * 100)}% do fundo</span></button>`;
       const c = CAIXAS.length ? caixaPara(up5(s.r.W), up5(s.r.L), up5(s.r.H)) : null;
       const rt = Math.max(s.r.W, s.r.L) / Math.min(s.r.W, s.r.L), fm = rt < 1.15 ? 'quadrada' : `retangular 1 : ${rt.toFixed(1).replace('.', ',')}`;
-      return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">${fm}</span><span>${s.r.caixa && s.r.caixa.id ? 'caixa' : 'medida ideal'} ${up5(s.r.W)} × ${up5(s.r.L)} × ${up5(s.r.H)} mm · peças ocupam ${Math.round(s.r.fill * 100)}%</span><span class="mut">${s.r.caixa && s.r.caixa.id ? `vista dentro da Caixa padrão ${s.r.caixa.id}` : c ? `entra na Caixa padrão ${c.id} (${c.W} × ${c.L})` : 'nenhuma caixa padrão serve'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
+      return h + `<button class="sg" data-k="${k}">${miniSVG(s.r, o)}<b>${s.nome}</b><span class="mut">${fm}</span><span>medida ideal ${up5(s.r.W)} × ${up5(s.r.L)} × ${up5(s.r.H)} mm · peças ocupam ${Math.round(s.r.fill * 100)}%</span><span class="mut">${c ? `entra na Caixa padrão ${c.id} (${c.W} × ${c.L})` : 'nenhuma caixa padrão serve'}${s.r.packs.length > 1 ? ' · 2 camadas' : ''}</span></button>`;
     }).join('');
     setTimeout(passo, 0);
   })();
@@ -596,7 +661,8 @@ function sugestoes() {
 $('sugs').addEventListener('click', e => {
   const b = e.target.closest('.sg'); if (!b) return;
   const s = SUG[+b.dataset.k]; if (!s) return;
-  sel.clear(); layerIdx = 0; novaOrg(s.r.blocks, s.nome, s.r.caixa); render();
+  const nome = s.grupo.startsWith('cx:') ? `Caixa ${s.grupo.slice(3)} · ${s.nome}` : s.grupo === 'mesma' ? `Mesma caixa · ${s.nome}` : s.nome;
+  sel.clear(); layerIdx = 0; novaOrg(s.r.blocks, nome, s.r.caixa); render();
 });
 
 // mockup da caixa em vetor: parede laranja de 10 mm por FORA da medida interna, fundo laranja claro
@@ -760,7 +826,7 @@ document.addEventListener('keydown', e => {
 });
 
 // organizacoes
-$('lay').addEventListener('input', () => { const { prod, o } = cur(); slotOf(prod, o).idx = +$('lay').value; sel.clear(); saveLays(); render(); });
+$('lay').addEventListener('input', () => { const { prod, o } = cur(); slotOf(prod, o).idx = +$('lay').value; sel.clear(); saveLays(); render(); sugestoes(); });
 $('btnNova').addEventListener('click', () => { novaOrg(lastR.blocks, null, lastR.caixa); sel.clear(); render(); });
 $('btnSq').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 1.05, peso: 4, forma: 'q' }, P).blocks, 'Auto quadrada'); sel.clear(); layerIdx = 0; render(); });
 $('btnRe').addEventListener('click', () => { const { prod, o } = cur(); novaOrg(build0(prod, { ...o, ratio: 2.2, minRatio: 1.5, peso: 4, forma: 'r' }, P).blocks, 'Auto retangular'); sel.clear(); layerIdx = 0; render(); });
@@ -780,6 +846,13 @@ $('tbl').innerHTML = '<tr><th>Peça</th><th>Larg</th><th>Prof</th><th>Alt</th></
   ['w', 'd', 'h'].map(f => `<td><input type="number" data-k="${k}" data-f="${f}" value="${p[f]}" min="5"></td>`).join('') + '</tr>').join('');
 $('tbl').addEventListener('input', e => { const t = e.target; if (t.dataset.k) { P[t.dataset.k][t.dataset.f] = +t.value || 5; render(); sugestoes(); } });
 $('minfill').addEventListener('input', () => { if (CAIXAS.length) calcCaixas(); });
+$('caixas').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.add != null) { const p = PROPS[+b.dataset.add]; if (p) EXTRAS.push(p.S); }
+  else if (b.dataset.rm != null) EXTRAS.splice(+b.dataset.rm, 1);
+  else return;
+  saveExtras(); _minL.clear(); calcCaixas(); render();
+});
 ['sel', 'layers', 'altura', 'gap', 'wall', 'margin', 'lid', 'ratio'].forEach(id => $(id).addEventListener('input', () => { sel.clear(); render(); sugestoes(); }));
 $('sel').value = PRODUTOS.findIndex(p => p.nome.startsWith('Combo Exclusivo'));
 render();
