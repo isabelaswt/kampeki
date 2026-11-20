@@ -4,121 +4,186 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>KAMPEKI — Embalagens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#f6f4f0;--card:#fff;--ink:#1d1d1b;--mut:#77736b;--line:#e2ddd4;--acc:#c0392b;--brand:#ff8b86;--brand-ink:#141413}
-@media (prefers-color-scheme:dark){:root{--bg:#161615;--card:#212120;--ink:#eee;--mut:#9a958b;--line:#34332f;--acc:#e0645a}}
+:root{
+  --paper:#f4f0e8; --stage:#ebe5da; --box:#fbf9f5; --ink:#141413; --mut:#736e65; --line:#dcd5c8;
+  --salmon:#ff8b86; --salmon-ink:#c24d48; --warn:#b8402f;
+  --serif:'Instrument Serif',Georgia,serif; --sans:'Inter Tight',system-ui,sans-serif;
+  --r:18px;
+}
+@media (prefers-color-scheme:dark){:root{
+  --paper:#11110f; --stage:#1a1916; --box:#22201d; --ink:#f1ece3; --mut:#9a948a; --line:#2f2c28; --salmon-ink:#ff9d98; --warn:#ff8a73;
+}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,sans-serif;font-weight:400}
-header{padding:18px 24px;background:var(--brand);color:var(--brand-ink);display:flex;align-items:center;gap:20px;flex-wrap:wrap}
-header img{height:26px;width:auto;display:block}
-h1{margin:0;font-size:14px;font-weight:400;letter-spacing:.08em;text-transform:uppercase}
-header p{margin:0;flex-basis:100%;font-size:13px;opacity:.8}
-header b{color:var(--brand-ink);text-decoration:underline}
-html,body{height:100%}
-body{display:flex;flex-direction:column;overflow:hidden}
-header{flex:0 0 auto}
-main{flex:1;min-height:0;display:grid;grid-template-columns:340px minmax(0,1fr);gap:20px;padding:20px 24px}
-.col{overflow:auto;min-height:0;padding-right:6px}
-@media(max-width:860px){body{display:block;overflow:auto;height:auto}main{display:block;padding:16px}.col{overflow:visible;margin-bottom:20px}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px}
-h2{margin:0 0 10px;font-size:12px;font-weight:400;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
-label{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0}
-select,input{font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
-input[type=number]{width:64px;text-align:right}
-select{max-width:210px}
-table{width:100%;border-collapse:collapse}
-td,th{padding:3px 4px;text-align:right;font-weight:400}
-td:first-child,th:first-child{text-align:left}
-th{color:var(--mut);font-size:11px}
-.sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
-.dim{font-size:28px;margin:4px 0}
-.dim small{font-size:13px;color:var(--mut)}
-.row{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut)}
-svg{width:100%;height:auto;display:block;background:var(--bg);border-radius:8px}
-.warn{color:var(--acc)}
-button{font:inherit;background:var(--ink);color:var(--bg);border:0;border-radius:6px;padding:7px 12px;cursor:pointer}
-.stage{position:static}
-.frame{width:100%;height:clamp(300px,46vh,520px);display:flex;align-items:center;justify-content:center;background:var(--bg);border-radius:8px;overflow:hidden}
-.frame svg{width:100%;height:100%;background:none}
-.tabs{display:flex;gap:6px;margin:10px 0;min-height:30px;align-items:center}
-.tab{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
-.tab.on{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+html{background:var(--paper)}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+button,select,input{font:inherit;color:inherit}
 .mut{color:var(--mut)}
-.tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
-.sec{background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:5px 10px}
-.sec:disabled{opacity:.4;cursor:default}
-.inl{display:flex;align-items:center;gap:6px;margin:0}
-details{margin:6px 0}
-summary{cursor:pointer}
-.sugs{display:flex;gap:8px;overflow-x:auto;padding:6px 0 10px}
-.sg{flex:0 0 176px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px;text-align:left;color:var(--ink);display:flex;flex-direction:column;gap:2px;font-size:12px}
-.sg svg{width:100%;height:auto;display:block}
-.sg:hover{border-color:var(--brand)}
-.col{display:flex;flex-direction:column;gap:20px}
+.warn{color:var(--warn)}
+b{font-weight:500}
+
+/* topo: marca + escolha do produto */
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:28px;padding:18px 32px;background:color-mix(in srgb,var(--paper) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top img{height:20px;width:auto;display:block}
+@media (prefers-color-scheme:dark){.top img{filter:invert(1)}}
+.kicker{font-family:var(--serif);font-style:italic;font-size:20px;color:var(--mut);white-space:nowrap}
+.pick{margin-left:auto;display:flex;align-items:center;gap:10px}
+.pick select{appearance:none;-webkit-appearance:none;border:1px solid var(--line);background:var(--box);border-radius:999px;padding:9px 38px 9px 18px;cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink) 50%),linear-gradient(135deg,var(--ink) 50%,transparent 50%);
+  background-position:calc(100% - 20px) 52%,calc(100% - 15px) 52%;background-size:5px 5px;background-repeat:no-repeat}
+#sel{min-width:260px;font-weight:500}
+.pick select:hover{border-color:var(--ink)}
+
+main{display:grid;grid-template-columns:288px minmax(0,1fr);gap:40px;padding:32px;max-width:1480px;margin:0 auto}
+
+/* lateral: ajustes e medidas, sem cartoes */
+aside{position:sticky;top:88px;align-self:start;max-height:calc(100vh - 110px);overflow:auto;padding-right:4px}
+.group{padding:0 0 22px;margin:0 0 22px;border-bottom:1px solid var(--line)}
+.group:last-child{border-bottom:0}
+.title{font-family:var(--serif);font-size:24px;line-height:1.1;margin:0 0 14px;font-weight:400}
+.note{font-size:12.5px;color:var(--mut);margin:-6px 0 14px}
+label{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0}
+input[type=number]{width:62px;text-align:right;border:0;border-bottom:1px solid var(--line);background:transparent;padding:3px 2px;border-radius:0;font-variant-numeric:tabular-nums}
+input[type=number]:focus{outline:0;border-bottom-color:var(--salmon-ink)}
+input::placeholder{color:var(--mut)}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td,th{padding:6px 4px;text-align:right;font-weight:400;border-bottom:1px solid var(--line);vertical-align:middle}
+td:first-child,th:first-child{text-align:left}
+th{color:var(--mut);font-size:12px;border-bottom-color:var(--ink)}
+#tbl td{font-size:13px}
+#tbl input{width:44px}
+.sw{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:1px}
+
+/* palco */
+.stage{min-width:0}
+.eyebrow{margin:0 0 6px;color:var(--mut);font-size:13px}
+.dim{font-family:var(--serif);font-size:clamp(44px,6vw,76px);line-height:.95;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.dim small{display:block;margin-top:10px;font-family:var(--sans);font-size:13px;letter-spacing:0;color:var(--mut)}
+.facts{display:flex;flex-wrap:wrap;gap:6px 22px;margin:16px 0 0;font-size:13.5px}
+.facts>span{position:relative}
+.legend{display:flex;flex-wrap:wrap;gap:4px 18px;margin:14px 0 0;font-size:12.5px;color:var(--mut)}
+.legend>span{white-space:nowrap}
+.frame{position:relative;margin-top:22px;width:100%;height:clamp(360px,58vh,660px);display:flex;align-items:center;justify-content:center;background:var(--stage);border-radius:var(--r);overflow:hidden}
+.frame svg{width:100%;height:100%;display:block}
+.frame svg>rect:first-of-type{fill:var(--box)}
+.frame svg text{font-family:var(--sans);font-size:12px;fill:var(--mut)}
+.frame svg line{stroke:var(--mut)}
+.tabs{display:flex;gap:6px;min-height:0;margin-top:14px;align-items:center;font-size:13px}
+.tabs:empty{display:none}
+
+/* barra de ferramentas e botoes */
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}
+.toolbar .sep{width:1px;height:22px;background:var(--line);margin:0 6px}
+.inl{padding:0;gap:8px;color:var(--mut)}
+#lay{appearance:none;-webkit-appearance:none;border:1px solid var(--line);background:var(--box);border-radius:999px;padding:7px 14px;max-width:220px;cursor:pointer;color:var(--ink)}
+button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:7px 14px;cursor:pointer;transition:border-color .15s,background .15s}
+button:hover:not(:disabled){border-color:var(--ink)}
+button:disabled{opacity:.35;cursor:default}
+.tab{padding:5px 12px}
+.tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+#hint{flex-basis:100%;font-size:12.5px;margin-top:2px}
+
+/* sugestoes: miniaturas */
+.alt{margin-top:34px}
+.alt-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.sugs{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scrollbar-width:thin}
+.sg{flex:0 0 190px;background:var(--stage);border:1px solid transparent;border-radius:14px;padding:10px 10px 12px;text-align:left;display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.sg:hover{border-color:var(--salmon)}
+.sg svg{width:100%;height:auto;display:block;margin-bottom:6px}
+.sg b{font-size:13.5px}
+
+/* rodape de dados */
+.data{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;padding-top:28px;border-top:1px solid var(--line)}
+#caixas p{margin:0 0 10px;font-size:13px}
+details{border-bottom:1px solid var(--line);padding:9px 0}
+summary{cursor:pointer;list-style:none;display:flex;gap:8px;align-items:baseline}
+summary::-webkit-details-marker{display:none}
+summary::before{content:'+';width:12px;color:var(--mut)}
+details[open] summary::before{content:'–'}
+details>div{padding:6px 0 4px 20px;font-size:13px}
+#all td{font-size:13px}
+
+@media (max-width:960px){
+  .top{flex-wrap:wrap;gap:12px 20px;padding:14px 16px;position:static}
+  .pick{margin-left:0;width:100%}
+  #sel{min-width:0;flex:1}
+  main{grid-template-columns:1fr;padding:20px 16px;gap:28px}
+  aside{position:static;max-height:none;order:2}
+  .data{grid-template-columns:1fr}
+  .frame{height:auto;aspect-ratio:640/440}
+}
 </style>
 </head>
 <body>
-<header>
+<header class="top">
   <img src="brand/logo.svg" alt="KAMPEKI">
-  <h1>Embalagens · Porto Alegre</h1>
-  <p>Caixa dimensionada a partir das peças de cada combo. Medidas das peças são <b>estimadas</b> (o cardápio não informa) — edite na tabela.</p>
+  <span class="kicker">embalagens</span>
+  <div class="pick">
+    <select id="sel" aria-label="Produto"></select>
+    <select id="layers" aria-label="Camadas"><option value="1">1 camada</option><option value="2">2 camadas</option></select>
+  </div>
 </header>
 <main>
-  <div class="col">
-    <div class="card">
-      <h2>Produto</h2>
-      <label>Combo <select id="sel"></select></label>
-      <label>Camadas
-        <select id="layers"><option value="1">1 camada</option><option value="2">2 camadas</option></select>
-      </label>
-      <label>Folga entre peças (mm) <input id="gap" type="number" value="0" min="-10"></label>
-      <label>Espessura divisória (mm) <input id="wall" type="number" value="2" min="0"></label>
-      <label>Margem da parede (mm) <input id="margin" type="number" value="2" min="0"></label>
-      <label>Folga da tampa (mm) <input id="lid" type="number" value="8" min="0"></label>
+  <aside>
+    <section class="group">
+      <h2 class="title">Ajustes da caixa</h2>
+      <label>Folga entre peças <input id="gap" type="number" value="0" min="-10"></label>
+      <label>Espessura da divisória <input id="wall" type="number" value="2" min="0"></label>
+      <label>Margem da parede <input id="margin" type="number" value="2" min="0"></label>
+      <label>Folga da tampa <input id="lid" type="number" value="8" min="0"></label>
       <label>Proporção máx. (comp/larg) <input id="ratio" type="number" value="1.8" step=".1" min="1"></label>
-      <label>Peças na altura (opcional) <input id="altura" type="number" value="" min="1" max="12" placeholder="auto"></label>
-    </div>
-    <div class="card">
-      <h2>Medidas das peças (mm, estimadas)</h2>
+      <label>Peças na altura <input id="altura" type="number" value="" min="1" max="12" placeholder="auto"></label>
+      <p class="note" style="margin:10px 0 0">Medidas em milímetros.</p>
+    </section>
+    <section class="group">
+      <h2 class="title">Medidas das peças</h2>
+      <p class="note">Estimadas — o cardápio não informa. Edite para recalcular.</p>
       <table id="tbl"></table>
+    </section>
+  </aside>
+
+  <section class="stage">
+    <p class="eyebrow">Caixa interna, vista de cima</p>
+    <div class="dim" id="dim"></div>
+    <div class="facts" id="sug"></div>
+    <div class="legend" id="meta"></div>
+    <div id="tabs" class="tabs"></div>
+    <div id="views" class="frame"></div>
+    <div class="toolbar">
+      <label class="inl">Organização <select id="lay"></select></label>
+      <button id="btnNova" title="Copia a organização atual para testar uma variação">Nova</button>
+      <button id="btnSq">Auto quadrada</button>
+      <button id="btnRe">Auto retangular</button>
+      <button id="btnRename">Renomear</button>
+      <button id="btnDel">Excluir</button>
+      <span class="sep"></span>
+      <button id="btnRot">Girar (R)</button>
+      <button id="btnLayer">Outra camada</button>
+      <span id="hint" class="mut"></span>
     </div>
-  </div>
-  <div class="col">
-    <div class="card stage">
-      <h2>Caixa interna · vista de cima</h2>
-      <div class="dim" id="dim"></div>
-      <div class="row" id="sug"></div>
-      <div class="row" id="meta"></div>
-      <div class="tools">
-        <label class="inl">Organização <select id="lay"></select></label>
-        <button id="btnNova" class="sec" title="Copia a organização atual para testar uma variação">+ Nova</button>
-        <button id="btnSq" class="sec">Auto quadrada</button>
-        <button id="btnRe" class="sec">Auto retangular</button>
-        <button id="btnRename" class="sec">Renomear</button>
-        <button id="btnDel" class="sec">Excluir</button>
-      </div>
-      <div class="tools">
-        <button id="btnRot" class="sec">Girar bloco (R)</button>
-        <button id="btnLayer" class="sec">Outra camada</button>
-        <span id="hint" class="mut"></span>
-      </div>
-      <div class="mut" style="margin-top:8px">Sugestões — clique para usar (depois dá para ajustar)</div>
+
+    <div class="alt">
+      <div class="alt-head"><h2 class="title" style="margin:0">Outras organizações</h2><span class="mut" style="font-size:12.5px">clique para usar</span></div>
       <div id="sugs" class="sugs"></div>
-      <div id="tabs" class="tabs"></div>
-      <div id="views" class="frame"></div>
     </div>
-    <div class="card">
-      <h2>Caixas padrão (mínimo de caixas)</h2>
-      <label>Aproveitamento mínimo (%) <input id="minfill" type="number" value="40" min="30" max="95"></label>
-      <div id="caixas"><span class="mut">calculando…</span></div>
+
+    <div class="data">
+      <section>
+        <h2 class="title">Caixas padrão</h2>
+        <label style="max-width:320px">Aproveitamento mínimo (%) <input id="minfill" type="number" value="40" min="30" max="95"></label>
+        <div id="caixas" style="margin-top:10px"><span class="mut">calculando…</span></div>
+      </section>
+      <section>
+        <h2 class="title">Todos os produtos</h2>
+        <table id="all"></table>
+      </section>
     </div>
-    <div class="card">
-      <h2>Todos os produtos</h2>
-      <table id="all"></table>
-    </div>
-  </div>
+  </section>
 </main>
-<script src="data.js?v=20261120c"></script>
-<script src="app.js?v=20261120c"></script>
+<script src="data.js?v=20261120d"></script>
+<script src="app.js?v=20261120d"></script>
 </body>
 </html>
